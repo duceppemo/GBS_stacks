@@ -1,5 +1,5 @@
 # GBS_stacks
-A pipeline to process Genotyping-by-Sequencing (GBS) data from Illimina or IonTorrent using stacks to call the genotypes and variants.
+A pipeline to process Genotyping-by-Sequencing (GBS) data from Illumina or IonTorrent (single-end or paired-end) using `stacks` to call the genotypes and the variants.
 
 ## Installation
 Requirements are install throuh conda:
