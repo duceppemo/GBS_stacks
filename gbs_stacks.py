@@ -62,14 +62,14 @@ class GBS(object):
         if self.ion:
             print('Processing IonTorrent reads...')
             # Trim reads with bbduk
-            # Methods.parallel_trim_reads(Methods.trim_iontorrent, self.sample_dict, trimmed, self.cpu)
+            Methods.parallel_trim_reads(Methods.trim_iontorrent, self.sample_dict, trimmed, self.cpu)
 
             # Update sample_dict
             self.sample_dict = defaultdict(list)
             Methods.get_files(trimmed, self.sample_dict)
 
             # Map reads
-            # Methods.parallel_map_bowtie2_se(mapped, self.ref, self.sample_dict, self.cpu)
+            Methods.parallel_map_bowtie2_se(mapped, self.ref, self.sample_dict, self.cpu)
         else:
             print('Processing Illumina reads...')
             if self.read_type == 'se':
@@ -95,12 +95,12 @@ class GBS(object):
 
         # Call variants
         print('Calling variants...')
-        # Methods.call_snps_gstacks(mapped, self.map, self.out_folder, self.cpu)
+        Methods.call_snps_gstacks(mapped, self.map, self.out_folder, self.cpu)
 
         # Make stats and create filtered VCF file
         print('Filtering variants...')
         pop_folder = self.out_folder + '/populations/'
-        # Methods.make_pop_stats(self.out_folder, pop_folder, self.map, self.cpu)
+        Methods.make_pop_stats(self.out_folder, pop_folder, self.map, self.cpu)
 
         # Filter VCF to only keep homozygous loci
         Methods.filter_vcf(pop_folder + 'populations.snps.vcf', pop_folder + 'populations.snps.homo.vcf')
