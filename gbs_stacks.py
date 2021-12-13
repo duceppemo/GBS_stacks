@@ -1,5 +1,5 @@
 #!/usr/local/env python3
-
+import os
 from argparse import ArgumentParser
 from multiprocessing import cpu_count
 from gbs_methods_stacks import Methods
@@ -61,51 +61,87 @@ class GBS(object):
 
         # Process and map reads
         trimmed = self.out_folder + '/trimmed/'
+        done_trimming = trimmed + '/done_trimming'
         mapped = self.out_folder + '/mapped/'
+        done_mapping = mapped + '/done_mapping'
         if self.ion:
             print('Processing IonTorrent reads...')
             # Trim reads with bbduk
-            Methods.parallel_trim_reads(Methods.trim_iontorrent, self.sample_dict, trimmed, self.cpu)
+            if not os.path.exists(done_trimming):
+                Methods.parallel_trim_reads(Methods.trim_iontorrent, self.sample_dict, trimmed, self.cpu)
+                Methods.flag_done(done_trimming)
+            else:
+                print('Skipping trimming. Already done.')
 
             # Update sample_dict
             self.sample_dict = defaultdict(list)
             Methods.get_files(trimmed, self.sample_dict)
 
             # Map reads
-            Methods.parallel_map_bowtie2_se(mapped, self.ref, self.sample_dict, self.cpu)
+            if not os.path.exists(done_mapping):
+                Methods.parallel_map_bowtie2_se(mapped, self.ref, self.sample_dict, self.cpu)
+                Methods.flag_done(done_mapping)
+            else:
+                print('Skipping mapping. Already done.')
         else:
             print('Processing Illumina reads...')
             if self.read_type == 'se':
                 # Trim and demultiplex
-                Methods.process_radtags_se(self.input, self.barcodes, trimmed, self.enz1, renz_2=self.enz2)
+                if not os.path.exists(done_trimming):
+                    Methods.process_radtags_se(self.input, self.barcodes, trimmed, self.enz1, renz_2=self.enz2)
+                    Methods.flag_done(done_trimming)
+                else:
+                    print('Skipping trimming. Already done.')
 
                 # Update sample dict
                 self.sample_dict = defaultdict(list)
                 Methods.get_files(trimmed, self.sample_dict)
 
                 # Map
-                Methods.parallel_map_bowtie2_se(mapped, self.ref, self.sample_dict, self.cpu)
+                if not os.path.exists(done_mapping):
+                    Methods.parallel_map_bowtie2_se(mapped, self.ref, self.sample_dict, self.cpu)
+                    Methods.flag_done(done_mapping)
+                else:
+                    print('Skipping mapping. Already done.')
             else:  # elif self.read_type == 'pe':
                 # Trim and demultiplex
-                Methods.process_radtags_pe(self.input, self.barcodes, trimmed, self.enz1, renz_2=self.enz2)
+                if not os.path.exists(done_trimming):
+                    Methods.process_radtags_pe(self.input, self.barcodes, trimmed, self.enz1, renz_2=self.enz2)
+                    Methods.flag_done(done_trimming)
+                else:
+                    print('Skipping trimming. Already done.')
 
                 # Update sample dict
                 self.sample_dict = defaultdict(list)
                 Methods.get_files(trimmed, self.sample_dict)
 
                 # Map
-                Methods.parallel_map_bowtie2_pe(mapped, self.ref, self.sample_dict, self.cpu)
+                if not os.path.exists(done_mapping):
+                    Methods.parallel_map_bowtie2_pe(mapped, self.ref, self.sample_dict, self.cpu)
+                    Methods.flag_done(done_mapping)
+                else:
+                    print('Skipping mapping. Already done.')
 
         # Call variants
-        print('Calling variants...')
-        Methods.call_snps_gstacks(mapped, self.map, self.out_folder, self.cpu)
+        done_gstacks = self.out_folder + '/done_gstacks'
+        if not os.path.exists(done_gstacks):
+            print('Calling variants...')
+            Methods.call_snps_gstacks(mapped, self.map, self.out_folder, self.cpu)
+            Methods.flag_done(done_gstacks)
+        else:
+            print('Skipping variant calling (gstacks). Already done.')
 
         # Make stats and create SNP VCF file
-        print('Filtering variants...')
         pop_folder = self.out_folder + '/populations/'
-        Methods.make_pop_stats(self.out_folder, pop_folder, self.map, self.cpu)
+        done_populations = self.out_folder + '/done_populations'
+        if not os.path.exists(done_populations):
+            print('Computing stats...')
+            Methods.make_pop_stats(self.out_folder, pop_folder, self.map, self.cpu)
+        else:
+            print('Skipping population statistics (populations). Already done.')
 
         # Filter
+        print('Filtering variants...')
         # Methods.vcftools_filter_snp(pop_folder + 'populations.snps.vcf',
         #                             pop_folder + 'populations.filtered1.vcf')  # don't filter any SNPs
         Methods.vcftools_filter_depth(pop_folder + 'populations.snps.vcf',

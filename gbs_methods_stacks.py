@@ -116,6 +116,11 @@ class Methods(object):
                 f.write('{}\n'.format(l))
 
     @staticmethod
+    def flag_done(flag_file):
+        with open(flag_file, 'w') as f:
+            pass
+
+    @staticmethod
     def trim_illumina_se(r1, trimmed_folder, cpu):
         sample = os.path.basename(r1).split('_R1')[0]
 
