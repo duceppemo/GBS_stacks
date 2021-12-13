@@ -29,6 +29,9 @@ class GBS(object):
         self.barcodes = args.barcodes
         self.enz1 = args.enzyme1
         self.enz2 = args.enzyme2
+        self.min_maf = args.min_maf
+        self.min_depth = args.min_depth
+        self.max_missing = 100 - args.max_missing
 
         # Data
         self.sample_dict = defaultdict(list)
@@ -97,20 +100,42 @@ class GBS(object):
         print('Calling variants...')
         Methods.call_snps_gstacks(mapped, self.map, self.out_folder, self.cpu)
 
-        # Make stats and create filtered VCF file
+        # Make stats and create SNP VCF file
         print('Filtering variants...')
         pop_folder = self.out_folder + '/populations/'
         Methods.make_pop_stats(self.out_folder, pop_folder, self.map, self.cpu)
 
+        # Filter
+        # Methods.vcftools_filter_snp(pop_folder + 'populations.snps.vcf',
+        #                             pop_folder + 'populations.filtered1.vcf')  # don't filter any SNPs
+        Methods.vcftools_filter_depth(pop_folder + 'populations.snps.vcf',
+                                      pop_folder + 'populations.filtered1.vcf')
+        Methods.vcftools_filter_maf(pop_folder + 'populations.filtered1.vcf',
+                                    pop_folder + 'populations.filtered2.vcf')
+        Methods.vcftools_filter_missing(pop_folder + 'populations.filtered2.vcf',
+                                        pop_folder + 'populations.filtered3.vcf')
+        Methods.ld_filering(pop_folder + 'populations.filtered3.vcf',
+                            pop_folder + 'populations.filtered3.vcf')
+        Methods.vcftools_stats(pop_folder + 'populations.filtered3.vcf',
+                               pop_folder + 'populations.filtered3.vcf')
+
         # Filter VCF to only keep homozygous loci
-        Methods.filter_vcf(pop_folder + 'populations.snps.vcf', pop_folder + 'populations.snps.homo.vcf')
+        Methods.filter_out_heterozygous(pop_folder + 'populations.filtered3.vcf',
+                                        pop_folder + 'populations.filtered3.homo.vcf')
 
         # Convert VCF to fasta
-        Methods.vcf2fasta(pop_folder + 'populations.snps.homo.vcf', pop_folder + 'populations.snps.homo.fasta')
+        print('Converting VCF to fasta...')
+        Methods.vcf2fasta(pop_folder + 'populations.filtered3.homo.vcf',
+                          pop_folder + 'populations.filtered3.homo.fasta')
+        Methods.vcf2fasta(pop_folder + 'populations.filtered3.vcf',
+                          pop_folder + 'populations.filtered3.fasta')
 
         # Make tree
         print('Making tree...')
-        Methods.make_tree_raxml(pop_folder + 'populations.snps.homo.fasta', pop_folder + '/tree', self.cpu)
+        Methods.make_tree_raxml(pop_folder + 'populations.filtered3.homo.fasta',
+                                pop_folder + '/tree_homo', self.cpu)
+        Methods.make_tree_raxml(pop_folder + 'populations.filtered3.fasta',
+                                pop_folder + '/tree', self.cpu)
 
 
 if __name__ == "__main__":
@@ -157,6 +182,15 @@ if __name__ == "__main__":
                         required=False,
                         action='store_true',  # implies default=False
                         help='Reads are from IonTorrent (different trim parameters). Default is Illumina.')
+    parser.add_argument('--min-maf', default=0.05, metavar='0.05',
+                        type=float, required=False,
+                        help='Minimum allele frequency.')
+    parser.add_argument('--min-depth', default=10, metavar='10',
+                        type=int, required=False,
+                        help='Minimum average depth of coverage.')
+    parser.add_argument('--max-missing', default=10, metavar='0.30',
+                        type=float, required=False,
+                        help='Maximum percentage of missing values.')
 
     # Get the arguments into an object
     arguments = parser.parse_args()

@@ -4,7 +4,6 @@
 import subprocess
 import os
 import sys
-import pysam
 from concurrent import futures
 import pathlib
 from multiprocessing import cpu_count
@@ -343,16 +342,94 @@ class Methods(object):
                '--popmap', pop_map,
                '--threads', str(cpu),
                '--vcf',
-               '--min-samples-overall', str(1.0),
-               '--plink',
-               # '--fstats', '--vcf', '--structure', '--fasta-loci', '--plink',
-               '--min-maf', str(0.05),
                '--write-single-snp']
 
         subprocess.run(cmd)
 
     @staticmethod
-    def filter_vcf(input_vcf, output_vcf):
+    def vcftools_filter_snp(input_vcf, output_vcf):
+        # Only keep biallelic SNP loci
+        cmd = ['vcftools',
+               '--vcf', input_vcf,
+               '--out', output_vcf,
+               '--remove-indels',
+               '--remove-filtered-all',
+               '--min-alleles', str(2), '--max-alleles', str(2),
+               '--recode']
+        subprocess.run(cmd)
+
+        # Remove "recode" from the output file name
+        os.replace(output_vcf + '.recode.vcf', output_vcf)
+
+    # @staticmethod
+    # def vcftools_filter_qual(input_vcf, output_vcf):
+    #     cmd = ['vcftools',
+    #            '--vcf', input_vcf,
+    #            '--out', output_vcf,
+    #            '--minQ', str(20),
+    #            '--recode']
+    #     subprocess.run(cmd)
+    #
+    #     # Remove "recode" from the output file name
+    #     os.replace(output_vcf + '.recode.vcf', output_vcf)
+
+    @staticmethod
+    def vcftools_filter_maf(input_vcf, output_vcf, min_maf):
+        cmd = ['vcftools',
+               '--vcf', input_vcf,
+               '--out', output_vcf,
+               '--maf', str(min_maf),
+               '--recode']
+        subprocess.run(cmd)
+
+        # Remove "recode" from the output file name
+        os.replace(output_vcf + '.recode.vcf', output_vcf)
+
+    @staticmethod
+    def vcftools_filter_depth(input_vcf, output_vcf, min_depth):
+        cmd = ['vcftools',
+               '--vcf', input_vcf,
+               '--out', output_vcf,
+               '--min-meanDP', str(min_depth),
+               '--recode']
+        subprocess.run(cmd)
+
+        # Remove "recode" from the output file name
+        os.replace(output_vcf + '.recode.vcf', output_vcf)
+
+    @staticmethod
+    def vcftools_filter_missing(input_vcf, output_vcf, max_missing):
+        cmd = ['vcftools',
+               '--vcf', input_vcf,
+               '--out', output_vcf,
+               '--max-missing', str(max_missing),
+               '--recode']
+        subprocess.run(cmd)
+
+        # Remove "recode" from the output file name
+        os.replace(output_vcf + '.recode.vcf', output_vcf)
+
+    @staticmethod
+    def vcftools_stats(input_vcf, output_vcf):
+        cmd = ['vcftools',
+               '--vcf', input_vcf,
+               '--out', output_vcf,
+               '--site-mean-depth']
+        subprocess.run(cmd)
+
+    @staticmethod
+    def ld_filering(input_vcf, output_vcf):
+        # Output sites with Linkage desequilibrium
+        cmd = ['vcftools',
+               '--vcf', input_vcf,
+               '--out', output_vcf,
+               '--hap-r2', '--min-r2', str(0.5)]
+
+        ld_file = output_vcf + '.hap.ld'
+        subprocess.run(cmd)
+
+    @staticmethod
+    def filter_out_heterozygous(input_vcf, output_vcf):
         with open(output_vcf, 'w') as out_fh:
             with open(input_vcf, 'r') as in_fh:
                 match = ['0/1', '1/0']
@@ -364,6 +441,13 @@ class Methods(object):
 
     @staticmethod
     def vcf2fasta(input_vcf, output_fasta):
+        iupac_dict = {'AG': 'R',
+                      'CT': 'Y',
+                      'GC': 'S',
+                      'AT': 'W',
+                      'GT': 'K',
+                      'AC': 'M'}
+
         with open(output_fasta, 'w') as out_fh:
             with open(input_vcf, 'r') as in_fh:
                 vcf_dict = dict()
@@ -374,17 +458,22 @@ class Methods(object):
                     elif line.startswith('#CHROM'):
                         sample_list = line.rstrip().split('\t', 9)[9].split('\t')
                         df = pd.DataFrame(columns=sample_list)
-                        # for s in sample_list:
-                        #     vcf_dict[s] = []
-
                     else:
                         # Split data lines into 10 fields, the last one is the samples info
                         field_list = line.rstrip().split('\t', 9)
                         # Dictionary to convert 0/0 and 1/1 geno to REF or ALT call
-                        geno_dict = {'0/0': field_list[3],
-                                     '1/1': field_list[4],
-                                     '0/1': '.',
-                                     '1/0': '.'}
+                        ref = field_list[3]
+                        alt = field_list[4]
+                        try:
+                            iupac = iupac_dict[ref + alt]
+                        except KeyError:
+                            iupac = iupac_dict[alt + ref]
+
+                        geno_dict = {'0/0': ref,
+                                     '1/1': alt,
+                                     '0/1': iupac,
+                                     '1/0': iupac,
+                                     './.': '-'}
                         # Split the last field (sample info) and only keep the genotype
                         df.loc[len(df)] = [geno_dict[x.split(':')[0]] for x in field_list[9].split('\t')]
 
