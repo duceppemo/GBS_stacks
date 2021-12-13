@@ -78,3 +78,7 @@ python gbs_stacks.py -r Secale_cereale_Weining.fasta \
     -e1 pstI \
     -e2 mspI
 ```
+## SNP filtering
+The pipeline has a "resume" function implemented. For example, if the pipeline crashes at some point because an input file is not formatted correctly, the concerned file can be edited and the pipeline re-launched with the same command line and it will resume where it crashed. This is done by writing "report" files once a step is complete.
+
+As a bonus, this implementation allows testing multiple SNP filtering conditions. All that needs to be done is re-run the pipeline by changing the `--min-maf`, `--min-depth` and/or `--max-missing` value(s). Note that the previously generated files will be overwritten doing such. Make sure to move the files to another location before re-launching the pipeline if you want to compare the effect of various filtering settings.
