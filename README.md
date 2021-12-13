@@ -97,11 +97,11 @@ sample2	sample2
 └── sample2_R1.fastq.gz
 ```
 ## Outputs
-See `Stacks` manual for output files description (https://catchenlab.life.illinois.edu/stacks/manual/)
+See `stacks` manual for output files description (https://catchenlab.life.illinois.edu/stacks/manual/)
 
 Other output files of interest:
-* /output_gbs_folder/populations/populations.snps.vcf  # unfiltered SNPs from gstacks
-* /output_gbs_folder/populations/populations.depth_filtered.vcf  -> SNPs filtered for minimum average coverage
+* /output_gbs_folder/populations/populations.snps.vcf -> unfiltered SNPs from gstacks
+* /output_gbs_folder/populations/populations.depth_filtered.vcf -> SNPs filtered for minimum average coverage
 * /output_gbs_folder/populations/populations.maf_filtered.vcf -> SNPs filted for minimum average coverage + Minimum Allele Frequency
 * /output_gbs_folder/populations/populations.missing_filtered.vcf -> SNPs filtered for minimum average coverage + Minimum Allele Frequency + maximum missing values
 * /output_gbs_folder/populations/populations.missing_filtered.homo.vcf -> Only sites that display homozygous alleles
