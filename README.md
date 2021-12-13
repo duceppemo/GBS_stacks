@@ -78,6 +78,34 @@ python gbs_stacks.py -r Secale_cereale_Weining.fasta \
     -e1 pstI \
     -e2 mspI
 ```
+## Inputs
+Here are example of the required inputs:
+* Barcode description (barcode.tsv):
+```commandline
+CTAAGGTAA	sample1
+TAAGGAGAA	sample2
+```
+* Population map (pop_map_stacks.tsv):
+```commandline
+sample1	sample1
+sample2	sample2
+```
+* Absolute path of folder location containing the fastq files (folder structure from "tree" command):
+```
+/input_fastq_folder
+├── sample1_R1.fastq.gz
+└── sample2_R1.fastq.gz
+```
+## Outputs
+See `Stacks` manual for output files description (https://catchenlab.life.illinois.edu/stacks/manual/)
+
+Other output files of interest:
+* /output_gbs_folder/populations/populations.snps.vcf  # unfiltered SNPs from gstacks
+* /output_gbs_folder/populations/populations.depth_filtered.vcf  -> SNPs filtered for minimum average coverage
+* /output_gbs_folder/populations/populations.maf_filtered.vcf -> SNPs filted for minimum average coverage + Minimum Allele Frequency
+* /output_gbs_folder/populations/populations.missing_filtered.vcf -> SNPs filtered for minimum average coverage + Minimum Allele Frequency + maximum missing values
+* /output_gbs_folder/populations/populations.missing_filtered.homo.vcf -> Only sites that display homozygous alleles
+* /output_gbs_folder/populations/tree/RAxML_bestTree.populations.missing_filtered.tree -> Maximum likelyhood tree of sample based on SNPs
 ## SNP filtering
 The pipeline has a "resume" function implemented. For example, if the pipeline crashes at some point because an input file is not formatted correctly, the concerned file can be edited and the pipeline re-launched with the same command line and it will resume where it crashed. This is done by writing "report" files once a step is complete.
 

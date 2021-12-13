@@ -142,35 +142,33 @@ class GBS(object):
 
         # Filter
         print('Filtering variants...')
-        # Methods.vcftools_filter_snp(pop_folder + 'populations.snps.vcf',
-        #                             pop_folder + 'populations.filtered1.vcf')  # don't filter any SNPs
         Methods.vcftools_filter_depth(pop_folder + 'populations.snps.vcf',
-                                      pop_folder + 'populations.filtered1.vcf')
-        Methods.vcftools_filter_maf(pop_folder + 'populations.filtered1.vcf',
-                                    pop_folder + 'populations.filtered2.vcf')
-        Methods.vcftools_filter_missing(pop_folder + 'populations.filtered2.vcf',
-                                        pop_folder + 'populations.filtered3.vcf')
-        Methods.ld_filering(pop_folder + 'populations.filtered3.vcf',
-                            pop_folder + 'populations.filtered3.vcf')
-        Methods.vcftools_stats(pop_folder + 'populations.filtered3.vcf',
-                               pop_folder + 'populations.filtered3.vcf')
+                                      pop_folder + 'populations.depth_filtered.vcf')
+        Methods.vcftools_filter_maf(pop_folder + 'populations.depth_filtered.vcf',
+                                    pop_folder + 'populations.maf_filtered.vcf')
+        Methods.vcftools_filter_missing(pop_folder + 'populations.maf_filtered.vcf',
+                                        pop_folder + 'populations.missing_filtered.vcf')
+        Methods.ld_filering(pop_folder + 'populations.missing_filtered.vcf',
+                            pop_folder + 'populations.ld_stats.vcf')
+        Methods.vcftools_stats(pop_folder + 'populations.missing_filtered.vcf',
+                               pop_folder + 'populations.pop_stats.vcf')
 
         # Filter VCF to only keep homozygous loci
-        Methods.filter_out_heterozygous(pop_folder + 'populations.filtered3.vcf',
-                                        pop_folder + 'populations.filtered3.homo.vcf')
+        Methods.filter_out_heterozygous(pop_folder + 'populations.missing_filtered.vcf',
+                                        pop_folder + 'populations.missing_filtered.homo.vcf')
 
         # Convert VCF to fasta
         print('Converting VCF to fasta...')
-        Methods.vcf2fasta(pop_folder + 'populations.filtered3.homo.vcf',
-                          pop_folder + 'populations.filtered3.homo.fasta')
-        Methods.vcf2fasta(pop_folder + 'populations.filtered3.vcf',
-                          pop_folder + 'populations.filtered3.fasta')
+        Methods.vcf2fasta(pop_folder + 'populations.missing_filtered.homo.vcf',
+                          pop_folder + 'populations.missing_filtered.homo.fasta')
+        Methods.vcf2fasta(pop_folder + 'populations.missing_filtered.vcf',
+                          pop_folder + 'populations.missing_filtered.fasta')
 
         # Make tree
         print('Making tree...')
-        Methods.make_tree_raxml(pop_folder + 'populations.filtered3.homo.fasta',
+        Methods.make_tree_raxml(pop_folder + 'populations.missing_filtered.homo.fasta',
                                 pop_folder + '/tree_homo', self.cpu)
-        Methods.make_tree_raxml(pop_folder + 'populations.filtered3.fasta',
+        Methods.make_tree_raxml(pop_folder + 'populations.missing_filtered.fasta',
                                 pop_folder + '/tree', self.cpu)
 
 
