@@ -31,7 +31,7 @@ class GBS(object):
         self.enz2 = args.enzyme2
         self.min_maf = args.min_maf
         self.min_depth = args.min_depth
-        self.max_missing = 100 - args.max_missing
+        self.max_missing = 1.00 - args.max_missing
 
         # Data
         self.sample_dict = defaultdict(list)
