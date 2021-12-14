@@ -148,11 +148,11 @@ class GBS(object):
         # Filter
         print('Filtering variants...')
         Methods.vcftools_filter_depth(pop_folder + 'populations.snps.vcf',
-                                      pop_folder + 'populations.depth_filtered.vcf')
+                                      pop_folder + 'populations.depth_filtered.vcf', self.min_depth)
         Methods.vcftools_filter_maf(pop_folder + 'populations.depth_filtered.vcf',
-                                    pop_folder + 'populations.maf_filtered.vcf')
+                                    pop_folder + 'populations.maf_filtered.vcf', self.min_maf)
         Methods.vcftools_filter_missing(pop_folder + 'populations.maf_filtered.vcf',
-                                        pop_folder + 'populations.missing_filtered.vcf')
+                                        pop_folder + 'populations.missing_filtered.vcf', self.max_missing)
         Methods.ld_filering(pop_folder + 'populations.missing_filtered.vcf',
                             pop_folder + 'populations.ld_stats.vcf')
         Methods.vcftools_stats(pop_folder + 'populations.missing_filtered.vcf',
