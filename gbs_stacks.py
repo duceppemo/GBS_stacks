@@ -137,6 +137,7 @@ class GBS(object):
         if not os.path.exists(done_populations):
             print('Computing stats...')
             Methods.make_pop_stats(self.out_folder, pop_folder, self.map, self.cpu)
+            Methods.flag_done(done_populations)
         else:
             print('Skipping population statistics (populations). Already done.')
 
