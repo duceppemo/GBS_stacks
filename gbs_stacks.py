@@ -59,11 +59,18 @@ class GBS(object):
         # Check restriction enzyme(s)
         Methods.check_enzymes([self.enz1, self.enz2])
 
-        # Process and map reads
+        # Step completion report files
+        done_trimming = self.out_folder + '/done_trimming'
+        done_mapping = self.out_folder + '/done_mapping'
+        done_gstacks = self.out_folder + '/done_gstacks'
+        done_populations = self.out_folder + '/done_populations'
+
+        # Output folders to create
         trimmed = self.out_folder + '/trimmed/'
-        done_trimming = trimmed + '/done_trimming'
         mapped = self.out_folder + '/mapped/'
-        done_mapping = mapped + '/done_mapping'
+        pop_folder = self.out_folder + '/populations/'
+
+        # Process and map reads
         if self.ion:
             print('Processing IonTorrent reads...')
             # Trim reads with bbduk
@@ -123,7 +130,6 @@ class GBS(object):
                     print('Skipping mapping. Already done.')
 
         # Call variants
-        done_gstacks = self.out_folder + '/done_gstacks'
         if not os.path.exists(done_gstacks):
             print('Calling variants...')
             Methods.call_snps_gstacks(mapped, self.map, self.out_folder, self.cpu)
@@ -132,8 +138,6 @@ class GBS(object):
             print('Skipping variant calling (gstacks). Already done.')
 
         # Make stats and create SNP VCF file
-        pop_folder = self.out_folder + '/populations/'
-        done_populations = self.out_folder + '/done_populations'
         if not os.path.exists(done_populations):
             print('Computing stats...')
             Methods.make_pop_stats(self.out_folder, pop_folder, self.map, self.cpu)
