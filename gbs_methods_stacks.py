@@ -9,14 +9,16 @@ import pathlib
 from multiprocessing import cpu_count
 from psutil import virtual_memory
 import pandas as pd
+from collections import defaultdict
+from scipy.signal import find_peaks
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class Methods(object):
 
     accepted_extensions = ['.fq', '.fastq', '.fq.gz', '.fastq.gz']
-
     ion_adapter = 'ATCACCGACTGCCCATAGAGAGG'
-
     accepted_enz = ['aciI', 'ageI', 'aluI', 'apaLI', 'apeKI', 'apoI', 'aseI', 'bamHI', 'bbvCI', 'bfaI',
                     'bfuCI', 'bgIII', 'bsaHI', 'bspDI', 'bstYI', 'btgI', 'cac8I', 'claI', 'csp6I', 'ddeI',
                     'dpnII', 'eaeI', 'ecoRI', 'ecoRV', 'ecoT22I', 'haeIII', 'hinP1I', 'hindIII', 'hpaII',
@@ -36,18 +38,17 @@ class Methods(object):
         return status
 
     @staticmethod
-    def check_cpus(requested_cpu):
+    def check_cpus(requested_cpu, n_proc):
         total_cpu = cpu_count()
 
-        if requested_cpu:
-            if requested_cpu > total_cpu:
-                requested_cpu = total_cpu
-                sys.stderr.write("Number of threads was set higher than available CPUs ({})".format(total_cpu))
-                sys.stderr.write("Number of threads was set to {}".format(requested_cpu))
-        else:
+        if 1 > requested_cpu > total_cpu:
             requested_cpu = total_cpu
+            sys.stderr.write("Number of threads was set to {}".format(requested_cpu))
+        if 1 > n_proc > total_cpu:
+            n_proc = 2
+            sys.stderr.write("Number of threads was set to {}".format(2))
 
-        return requested_cpu
+        return requested_cpu, n_proc
 
     @staticmethod
     def check_mem(requested_mem):
@@ -63,12 +64,22 @@ class Methods(object):
         return requested_mem
 
     @staticmethod
+    def check_mode(ref, mode_ref, mode_denovo):
+        if not mode_ref and not mode_denovo:
+            raise Exception('Please choose your analysis mode: "--referenced" or "--de-novo".')
+        if mode_ref:
+            if not ref:
+                raise Exception('Please specify a reference fasta file for your referenced analysis.')
+
+    @staticmethod
     def make_folder(folder):
         # Will create parent directories if don't exist and will not return error if already exists
         pathlib.Path(folder).mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def get_files(in_folder, sample_dict):
+    def get_files(in_folder):
+        sample_dict = defaultdict(list)
+        # sample_dict = dict()
         # Look for input sequence files recursively
         for root, directories, filenames in os.walk(in_folder):
             for filename in filenames:
@@ -83,6 +94,8 @@ class Methods(object):
                         sample_dict[sample].insert(0, file_path)
         if not sample_dict:
             raise Exception('Sample dictionary empty!')
+
+        return sample_dict
 
     @staticmethod
     def check_map(sample_dict, map_file):
@@ -121,34 +134,38 @@ class Methods(object):
             pass
 
     @staticmethod
-    def trim_illumina_se(r1, trimmed_folder, cpu):
+    def trim_illumina_se(r1, output_folder, cpu):
         sample = os.path.basename(r1).split('_R1')[0]
+
+        Methods.make_folder(output_folder)
 
         cmd = ['fastp',
                '--thread', str(cpu),
                '--in1', r1,
-               '--out1', trimmed_folder + '/' + sample + 'fastq.gz',
+               '--out1', output_folder + '/' + sample + 'fastq.gz',
                '--length_required', str(64),
                '--cut_right',
-               '--html', trimmed_folder + '/' + sample + '.html']
+               '--html', output_folder + '/' + sample + '.html']
 
         print('\t{}'.format(sample))
         subprocess.run(cmd, stderr=subprocess.DEVNULL)
 
     @staticmethod
-    def trim_illumina_pe(r1, trimmed_folder, cpu):
+    def trim_illumina_pe(r1, output_folder, cpu):
         r2 = r1.replace('_R1', '_R2')
         sample = os.path.basename(r1).split('_R1')[0]
+
+        Methods.make_folder(output_folder)
 
         cmd = ['fastp',
                '--thread', str(cpu),
                '--in1', r1,
                '--in2', r2,
-               '--out1', trimmed_folder + '/' + sample + '_R1.fastq.gz',
-               '--out2', trimmed_folder + '/' + sample + '_R2.fastq.gz',
+               '--out1', output_folder + '/' + sample + '_R1.fastq.gz',
+               '--out2', output_folder + '/' + sample + '_R2.fastq.gz',
                '--length_required', str(64),
                '--cut_right',
-               '--html', trimmed_folder + '/' + sample + '.html']
+               '--html', output_folder + '/' + sample + '.html']
 
         print('\t{}'.format(sample))
         subprocess.run(cmd, stderr=subprocess.DEVNULL)
@@ -156,6 +173,7 @@ class Methods(object):
     @staticmethod
     def trim_iontorrent(r1, trimmed_folder, cpu):
         sample = os.path.basename(r1).split('_R1')[0]
+        sample = sample.split('.')[0]
 
         cmd = ['bbduk.sh',
                'in={}'.format(r1),
@@ -171,13 +189,107 @@ class Methods(object):
             subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT)
 
     @staticmethod
-    def parallel_trim_reads(trim_function, sample_dict, output_folder, cpu):
+    def read_length_dist(r1):
+        """
+        Make read length start of all reads combined, plot the distribution and find the peak.
+        Returns the optimal read length for trimming the reads for the ustacks.
+        """
+        sample = os.path.basename(r1).split('_R1')[0]
+        sample = sample.split('.')[0]
+
+        len_dict = dict()
+
+        cmd = ['readlength.sh',
+               'in={}'.format(r1),
+               'bin=5']
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        len_dist = p.communicate()[0].decode('utf-8')
+        lines = len_dist.split('\n')
+        for line in lines:
+            if line.startswith('#'):
+                continue
+            elif not line:
+                continue
+            else:
+                fields = line.split('\t')[:2]
+                len_dict[fields[0]] = fields[1]
+
+        return len_dict
+
+    @staticmethod
+    def parallel_read_length_dist(sample_dict, output_folder, cpu):
+        master_len_dict = dict()
+        with futures.ThreadPoolExecutor(max_workers=cpu) as executor:
+            args = (path_list[0] for sample, path_list in sample_dict.items())
+            for results in executor.map(Methods.read_length_dist,
+                                        [path_list[0] for sample, path_list in sample_dict.items()]):
+                for k, v in results.items():
+                    if k in master_len_dict:
+                        master_len_dict[int(k)] += int(v)
+                    else:
+                        master_len_dict[int(k)] = int(v)
+        df = pd.DataFrame.from_dict(master_len_dict, orient='index')  # , columns=['Length', 'Count'])
+        df.index.names = ['Length']
+        df.rename(columns={df.columns[0]: 'Count'}, inplace=True)
+
+        return df
+
+    @staticmethod
+    def find_peak(df, output_folder):
+        # plot the distribution
+        x = df.loc[:, 'Count'].values
+        y = df.index.values
+        xs = np.sort(x)
+        ys = np.array(y)[np.argsort(x)]
+
+        peaks, properties = find_peaks(x, prominence=1)
+        highest_peak = int(properties['prominences'].max())
+        p = np.interp(highest_peak, ys, xs)
+        size_to_keep = int(df[df['Count'] == int(p)].index.values)
+        fig, ax = plt.subplots()
+        g = plt.plot(x)
+        plt.plot(peaks, x[peaks], "x")
+        plt.tight_layout()
+        fig.savefig(output_folder + "/peaks.png")
+        plt.close()
+
+        return size_to_keep
+
+    @staticmethod
+    def trim_iontorrent_size(r1, trimmed_folder, cpu, size):
+        """
+        trim all reads to 100bp
+        """
+        sample = os.path.basename(r1).split('_R1')[0]
+        sample = sample.split('.')[0]
+
+        cmd = ['bbduk.sh',
+               'in={}'.format(r1),
+               'out={}'.format(trimmed_folder + sample + '.fastq.gz'),
+               'literal={}'.format(Methods.ion_adapter),
+               'k=21', 'mink=15', 'hdist=1', 'ktrim=r', 'trimq=6',
+               'minlength={}'.format(size), 'forcetrimright={}'.format(size-1),
+               'overwrite=t', 'threads={}'.format(cpu)]
+
+        print('\t{}'.format(sample))
+        # subprocess.run(cmd, stderr=subprocess.DEVNULL)
+        log_file = trimmed_folder + sample + '_bbduk.log'
+        with open(log_file, 'w') as f:
+            subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT)
+
+    @staticmethod
+    def parallel_trim_reads(trim_function, sample_dict, output_folder, cpu, parallel, **kwargs):
         print('Trimming reads...')
         Methods.make_folder(output_folder)
+        test = kwargs['size']
 
-        with futures.ThreadPoolExecutor(max_workers=4) as executor:
-            args = ((path_list[0], output_folder, int(cpu/4))
-                    for sample, path_list in sample_dict.items())
+        with futures.ThreadPoolExecutor(max_workers=parallel) as executor:
+            if kwargs:
+                args = ((path_list[0], output_folder, int(cpu / parallel), kwargs['size'])
+                        for sample, path_list in sample_dict.items())
+            else:
+                args = ((path_list[0], output_folder, int(cpu / parallel))
+                        for sample, path_list in sample_dict.items())
             for results in executor.map(lambda x: trim_function(*x), args):
                 pass
 
@@ -226,7 +338,7 @@ class Methods(object):
         subprocess.run(samtools_index_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
     @staticmethod
-    def parallel_map_bowtie2_se(output_folder, ref, sample_dict, cpu):
+    def parallel_map_bowtie2_se(output_folder, ref, sample_dict, cpu, parallel):
         # Index reference genome if not already done
         ref_index = '.'.join(ref.split('.')[:-1])
         if not os.path.exists(ref_index + '.1.bt2') and not os.path.exists(ref_index + '.1.bt2l'):
@@ -235,8 +347,8 @@ class Methods(object):
         print('Mapping reads...')
         Methods.make_folder(output_folder)
 
-        with futures.ThreadPoolExecutor(max_workers=4) as executor:
-            args = ((ref, path_list[0], int(cpu/4), output_folder + '/' + sample + '.bam')
+        with futures.ThreadPoolExecutor(max_workers=parallel) as executor:
+            args = ((ref, path_list[0], int(cpu/parallel), output_folder + '/' + sample + '.bam')
                     for sample, path_list in sample_dict.items())
             for results in executor.map(lambda x: Methods.map_bowtie2_se(*x), args):
                 pass
@@ -285,7 +397,7 @@ class Methods(object):
         subprocess.run(samtools_index_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
     @staticmethod
-    def parallel_map_bowtie2_pe(output_folder, ref, sample_dict, cpu):
+    def parallel_map_bowtie2_pe(output_folder, ref, sample_dict, cpu, parallel):
         # Index reference genome if not already done
         ref_index = '.'.join(ref.split('.')[:-1])
         if not os.path.exists(ref_index + '.1.bt2') and not os.path.exists(ref_index + '.1.bt2l'):
@@ -294,14 +406,15 @@ class Methods(object):
         print('Mapping reads...')
         Methods.make_folder(output_folder)
 
-        with futures.ThreadPoolExecutor(max_workers=4) as executor:
-            args = ((ref, path_list[0], path_list[1], int(cpu/4), output_folder + '/' + sample + '.bam')
+        with futures.ThreadPoolExecutor(max_workers=parallel) as executor:
+            args = ((ref, path_list[0], path_list[1], int(cpu/parallel), output_folder + '/' + sample + '.bam')
                     for sample, path_list in sample_dict.items())
             for results in executor.map(lambda x: Methods.map_bowtie2_pe(*x), args):
                 pass
 
     @staticmethod
     def process_radtags_se(input_fastq_folder, barcode_tsv, output_folder, enz, **kwargs):
+        Methods.make_folder(output_folder)
         extra_arg_list = ['--renz_2']
         if kwargs:
             for k, v in kwargs.items():
@@ -316,6 +429,7 @@ class Methods(object):
 
     @staticmethod
     def process_radtags_pe(input_fastq_folder, barcode_tsv, output_folder, enz, **kwargs):
+        Methods.make_folder(output_folder)
         cmd = ['process_radtags',
                '-p', input_fastq_folder,
                '--paired',
@@ -327,13 +441,82 @@ class Methods(object):
         subprocess.run(cmd)
 
     @staticmethod
-    def call_snps_gstacks(cram_folder, pop_map, output_folder, cpu):
+    def ustacks(r1, output_folder, unique_id, cpu):
+        Methods.make_folder(output_folder)
+        cmd = ['ustacks',
+               '-f', r1,
+               '-i', unique_id,
+               '-o', output_folder,
+               '-p', str(cpu)]
+        subprocess.run(cmd)
+
+    @staticmethod
+    def parallel_ustacks(sample_dict, output_folder, cpu, parallel):
+        with futures.ThreadPoolExecutor(max_workers=parallel) as executor:
+            args = ((path_list[0], output_folder, str(i), int(cpu / parallel))
+                    for i, (sample, path_list) in enumerate(sample_dict.items()))
+            for results in executor.map(lambda x: Methods.ustacks(*x), args):
+                pass
+
+    @staticmethod
+    def cstacks(input_file, stacks_folder, cpu):
+        sample = stacks_folder + os.path.basename(input_file).split('.')[0]
+        cmd = ['cstacks',
+               '-s', sample,
+               '-o', stacks_folder,
+               '-p', str(cpu)]
+        subprocess.run(cmd)
+
+    @staticmethod
+    def parallel_cstacks(sample_dict, output_folder, cpu, parallel):
+        with futures.ThreadPoolExecutor(max_workers=parallel) as executor:
+            args = ((path_list[0], output_folder, int(cpu/parallel))
+                    for sample, path_list in sample_dict.items())
+            for results in executor.map(lambda x: Methods.cstacks(*x), args):
+                pass
+
+    @staticmethod
+    def sstacks(input_file, stacks_folder, cpu):
+        sample = stacks_folder + os.path.basename(input_file).split('.')[0]
+        cmd = ['sstacks',
+               '-c', stacks_folder,
+               '-s', sample,
+               '-o', stacks_folder,
+               '-p', str(cpu)]
+        subprocess.run(cmd)
+
+    @staticmethod
+    def parallel_sstacks(sample_dict, output_folder, cpu, parallel):
+        with futures.ThreadPoolExecutor(max_workers=parallel) as executor:
+            args = ((path_list[0], output_folder, int(cpu/parallel))
+                    for sample, path_list in sample_dict.items())
+            for results in executor.map(lambda x: Methods.sstacks(*x), args):
+                pass
+
+    @staticmethod
+    def tsv2bam_se(stacks_folder, pop_map, cpu):
+        cmd = ['tsv2bam',
+               '-P', stacks_folder,
+               '-M', pop_map,
+               '-t', str(cpu)]
+        subprocess.run(cmd)
+
+    @staticmethod
+    def tsv2bam_pe(stacks_folder, pop_map, fastq_folder, cpu):
+        cmd = ['tsv2bam',
+               '-P', stacks_folder,
+               '-M', pop_map,
+               '-R', fastq_folder,
+               '-t', str(cpu)]
+        subprocess.run(cmd)
+
+    @staticmethod
+    def call_snps_gstacks(bam_folder, pop_map, output_folder, cpu):
         cmd = ['gstacks',
-               '-I', cram_folder,
+               '-I', bam_folder,
                '-M', pop_map,
                '-O', output_folder,
                '-t', str(cpu)]
-
         subprocess.run(cmd)
 
     @staticmethod
@@ -348,7 +531,6 @@ class Methods(object):
                '--threads', str(cpu),
                '--vcf',
                '--write-single-snp']
-
         subprocess.run(cmd)
 
     @staticmethod
