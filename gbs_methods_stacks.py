@@ -771,6 +771,4 @@ class Methods(object):
         fig = px.bar(df3, x='Sample', y='% Hetero')
         fig.write_html(output_folder + '/' + 'hetero.html', auto_open=False)
 
-        # Markers LD distribution???
-
-        pass
+        # Number of SNPs after each round of filtering
