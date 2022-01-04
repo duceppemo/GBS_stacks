@@ -11,8 +11,10 @@ from psutil import virtual_memory
 import pandas as pd
 from collections import defaultdict
 from scipy.signal import find_peaks
+import plotly.express as px
 import matplotlib.pyplot as plt
 import numpy as np
+import gzip
 
 
 class Methods(object):
@@ -637,7 +639,6 @@ class Methods(object):
 
         with open(output_fasta, 'w') as out_fh:
             with open(input_vcf, 'r') as in_fh:
-                vcf_dict = dict()
                 for line in in_fh:
                     if line.startswith('##'):
                         # out_fh.write(line)
@@ -683,3 +684,93 @@ class Methods(object):
                '-x', str(1234), '-p', str(123)]
 
         subprocess.run(cmd)
+
+    @staticmethod
+    def parse_vcf(vcf_file):
+        vcf_dict = defaultdict()
+        with gzip.open(vcf_file, 'rt') if vcf_file.endswith('.gz') else open(vcf_file, 'r') as f:
+            for line in f:
+                if line.startswith('##'):
+                    continue
+                elif line.startswith('#CHROM'):
+                    sample_list = line.rstrip().split('\t', 9)[9].split('\t')
+                    # Convert list to dictionary
+                    # vcf_dict = {i: '' for i in sample_list}
+                else:
+                    # Split data lines into 10 fields, the last one is the samples info
+                    field_list = line.rstrip().split('\t', 9)
+                    # Dictionary to convert 0/0 and 1/1 geno to REF or ALT call
+                    ref = field_list[3]
+                    alt = field_list[4]
+
+                    # Split the last field (sample info) and only keep the genotype
+                    for i, sample_info in enumerate(field_list[9].split('\t')):
+                        geno_fieds = sample_info.split(':')
+                        GT = geno_fieds[0]
+                        DP = geno_fieds[1]
+
+                        if sample_list[i] not in vcf_dict:
+                            vcf_dict[sample_list[i]] = {'GT': [], 'DP': []}
+                        vcf_dict[sample_list[i]]['GT'].append(GT)
+                        vcf_dict[sample_list[i]]['DP'].append(DP)
+        return vcf_dict
+
+    @staticmethod
+    def coverage_graph(vcf_dict, output_folder):
+        # graph_dict = dict()
+        # n_loci = 0
+        # for sample, info_dict in vcf_dict.items():
+        #     if sample not in graph_dict:
+        #         graph_dict[sample] = {'cov': {}, 'miss': {}, 'hetero': {}}
+        #
+        #     c = 0
+        #     for x in info_dict['DP']:
+        #         n_loci += 1
+        #         try:
+        #             c += int(x)
+        #         except ValueError:
+        #             continue
+        #     graph_dict[sample]['cov'] = c
+        #
+        #     hetero = 0
+        #     missing = 0
+        #     for x in info_dict['GT']:
+        #         if x == './.':
+        #             missing += 1
+        #         elif x == ('0/1' or '1/0'):
+        #             hetero += 1
+        #     graph_dict[sample]['miss'] = missing
+        #     graph_dict[sample]['hetero'] = hetero
+
+        # Coverage per sample
+        df = pd.DataFrame(columns=['Sample', 'GT', 'DP'], index=None)
+        for sample, info_dict in vcf_dict.items():
+            for i in range(len(info_dict['GT'])):
+                gt = info_dict['GT'][i]
+                dp = info_dict['DP'][i]
+
+                df = df.append({'Sample': sample, 'GT': gt, 'DP': dp}, ignore_index=True)
+
+        df.replace(r'\.|\./\.', np.nan, regex=True, inplace=True)
+        df1 = df.loc[:, ['Sample', 'DP']].dropna()
+        df1['DP'] = df1['DP'].astype(int)
+        fig = px.violin(df1, x='Sample', y='DP')
+        fig.write_html(output_folder + '/' + 'coverage.html', auto_open=False)
+
+        # % missing per sample
+        n_loci = len(df)
+        df2 = df.GT.isnull().groupby(df['Sample']).sum().astype(int).reset_index(name='% Missing')
+        df2['% Missing'] = df2['% Missing'].apply(lambda x: int(x / n_loci * 100))
+        fig = px.bar(df2, x='Sample', y='% Missing')
+        fig.write_html(output_folder + '/' + 'missing.html', auto_open=False)
+
+        # % Hetorozygote per sample
+        df['GT'] = df['GT'].astype('category')
+        df3 = df.groupby(['Sample', 'GT']).size().reset_index(name="% Hetero")
+        df3['% Hetero'] = df3['% Hetero'].apply(lambda x: int(x / n_loci * 100))
+        fig = px.bar(df3, x='Sample', y='% Hetero')
+        fig.write_html(output_folder + '/' + 'hetero.html', auto_open=False)
+
+        # Markers LD distribution???
+
+        pass

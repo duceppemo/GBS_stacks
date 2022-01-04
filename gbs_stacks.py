@@ -266,6 +266,12 @@ class GBS(object):
         Methods.make_tree_raxml(tree + 'populations.3.missing_filtered.homo.fasta', tree, self.cpu)
         Methods.make_tree_raxml(tree + 'populations.3.missing_filtered.fasta', tree, self.cpu)
 
+        # Making stats
+        vcf_dict = Methods.parse_vcf(populations + 'populations.3.missing_filtered.vcf')
+
+        # Coverage graph
+        Methods.coverage_graph(vcf_dict, self.out_folder)
+
 
 if __name__ == "__main__":
     max_cpu = cpu_count()
