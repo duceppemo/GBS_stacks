@@ -91,7 +91,7 @@ class GBS(object):
 
         # Output folders to create
         # cleaned = self.out_folder + '/0_cleaned'
-        read_length = self.out_folder + '/length_distribution/'
+        read_length = self.out_folder + '/0_length_distribution/'
         trimmed = self.out_folder + '/1_trimmed/'
         mapped = self.out_folder + '/2_mapped/'
         stacks = self.out_folder + '/2_stacks/'
@@ -118,13 +118,14 @@ class GBS(object):
                                                 self.cpu, self.parallel)
                 else:  # de novo
                     # Find the best read length for trimming
-                    df = Methods.parallel_read_length_dist(self.sample_dict['raw'], read_length, self.cpu)
+                    df = Methods.parallel_read_length_dist(self.sample_dict['raw'], self.cpu)
                     # Create plot
                     import plotly.express as px
+                    Methods.make_folder(read_length)
                     fig = px.line(df, x=df.index, y='Count')
-                    fig.write_html(self.out_folder + '/' + 'first_figure.html', auto_open=False)
+                    fig.write_html(read_length + '/' + 'first_figure.html', auto_open=False)
                     # Detect peak
-                    trim_size = Methods.find_peak(df, self.out_folder)
+                    trim_size = Methods.find_peak(df, read_length)
 
                     # Trim all reads to specific length
                     Methods.parallel_trim_reads(Methods.trim_iontorrent_size, self.sample_dict['raw'], trimmed,
@@ -237,34 +238,35 @@ class GBS(object):
 
         # Filter
         print('Filtering variants...')
-        Methods.vcftools_filter_depth(populations + 'populations.snps.vcf',
-                                      populations + 'populations.1.depth_filtered.vcf', self.min_depth)
-        Methods.vcftools_filter_maf(populations + 'populations.1.depth_filtered.vcf',
-                                    populations + 'populations.2.maf_filtered.vcf', self.min_maf)
-        Methods.vcftools_filter_missing(populations + 'populations.2.maf_filtered.vcf',
-                                        populations + 'populations.3.missing_filtered.vcf', self.max_missing)
-        Methods.ld_filering(populations + 'populations.3.missing_filtered.vcf',
-                            populations + 'populations.ld_stats.vcf')
-        Methods.vcftools_stats(populations + 'populations.3.missing_filtered.vcf',
-                               populations + 'populations.pop_stats.vcf')
 
-        # Filter VCF to only keep homozygous loci
-        Methods.filter_out_heterozygous(populations + 'populations.3.missing_filtered.vcf',
-                                        populations + 'populations.3.missing_filtered.homo.vcf')
-
-        # Convert VCF to fasta
         tree = populations + '/tree/'
         Methods.make_folder(tree)
-        print('Converting VCF to fasta...')
-        Methods.vcf2fasta(populations + 'populations.3.missing_filtered.homo.vcf',
-                          tree + 'populations.3.missing_filtered.homo.fasta')
-        Methods.vcf2fasta(populations + 'populations.3.missing_filtered.vcf',
-                          tree + 'populations.3.missing_filtered.fasta')
 
-        # Make tree
+        depth_filt_out = populations + 'populations.1.depth{}_filtered.vcf'.format(self.min_depth)
+        maf_filt_out = populations + 'populations.2.maf{}_filtered.vcf'.format(self.min_maf)
+        missing_filt_out = populations + 'populations.3.missing{}_filtered.vcf'.format(self.max_missing)
+        ld_stat_out = populations + 'populations.ld_stats.vcf'
+        stat_out = populations + 'populations.pop_stats.vcf'
+        homo_filt_out = populations + 'populations.3.homo.vcf'
+        fastq_out = tree + 'populations.3.fasta'
+        fasta_homo_out = tree + 'populations.3.homo.fasta'
+
+        Methods.vcftools_filter_depth(populations + 'populations.snps.vcf', depth_filt_out, self.min_depth)
+        Methods.vcftools_filter_maf(depth_filt_out, maf_filt_out, self.min_maf)
+        Methods.vcftools_filter_missing(maf_filt_out, missing_filt_out, self.max_missing)
+        Methods.ld_stat(missing_filt_out, ld_stat_out)
+        Methods.vcftools_stats(missing_filt_out, stat_out)
+
+        # Filter VCF to only keep homozygous loci
+        Methods.filter_out_heterozygous(missing_filt_out, homo_filt_out)
+
+        # Convert VCF to fasta and make tree
+        print('Converting VCF to fasta...')
+        Methods.vcf2fasta(homo_filt_out, fasta_homo_out)
+        Methods.vcf2fasta(missing_filt_out, fastq_out)
         print('Making tree...')
-        Methods.make_tree_raxml(tree + 'populations.3.missing_filtered.homo.fasta', tree, self.cpu)
-        Methods.make_tree_raxml(tree + 'populations.3.missing_filtered.fasta', tree, self.cpu)
+        Methods.make_tree_raxml(fasta_homo_out, tree, self.cpu)
+        Methods.make_tree_raxml(fastq_out, tree, self.cpu)
 
         # Making stats
         vcf_dict = Methods.parse_vcf(populations + 'populations.3.missing_filtered.vcf')
@@ -313,7 +315,7 @@ if __name__ == "__main__":
                         required=False,
                         type=int, default=max_cpu,
                         help='Number of CPU. Default is maximum CPU available({}). Optional'.format(max_cpu))
-    parser.add_argument('--parallel', metavar=2,
+    parser.add_argument('--parallel', metavar='2',
                         required=False,
                         type=int, default=2,
                         help='Number of samples to process in parallel.')

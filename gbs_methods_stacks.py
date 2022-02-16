@@ -219,10 +219,9 @@ class Methods(object):
         return len_dict
 
     @staticmethod
-    def parallel_read_length_dist(sample_dict, output_folder, cpu):
+    def parallel_read_length_dist(sample_dict, cpu):
         master_len_dict = dict()
         with futures.ThreadPoolExecutor(max_workers=cpu) as executor:
-            args = (path_list[0] for sample, path_list in sample_dict.items())
             for results in executor.map(Methods.read_length_dist,
                                         [path_list[0] for sample, path_list in sample_dict.items()]):
                 for k, v in results.items():
@@ -247,7 +246,7 @@ class Methods(object):
         peaks, properties = find_peaks(x, prominence=1)
         highest_peak = int(properties['prominences'].max())
         p = np.interp(highest_peak, ys, xs)
-        size_to_keep = int(df[df['Count'] == int(p)].index.values)
+        size_to_keep = int(df[df['Count'] == int(p)].index.values) - 5  # 5 is bin size from readlength.sh
         fig, ax = plt.subplots()
         g = plt.plot(x)
         plt.plot(peaks, x[peaks], "x")
@@ -283,7 +282,7 @@ class Methods(object):
     def parallel_trim_reads(trim_function, sample_dict, output_folder, cpu, parallel, **kwargs):
         print('Trimming reads...')
         Methods.make_folder(output_folder)
-        test = kwargs['size']
+        # test = kwargs['size']
 
         with futures.ThreadPoolExecutor(max_workers=parallel) as executor:
             if kwargs:
@@ -532,6 +531,7 @@ class Methods(object):
                '--popmap', pop_map,
                '--threads', str(cpu),
                '--vcf',
+               '--ordered-export',
                '--write-single-snp']
         subprocess.run(cmd)
 
@@ -607,7 +607,7 @@ class Methods(object):
         subprocess.run(cmd)
 
     @staticmethod
-    def ld_filering(input_vcf, output_vcf):
+    def ld_stat(input_vcf, output_vcf):
         # Output sites with Linkage desequilibrium
         cmd = ['vcftools',
                '--vcf', input_vcf,
