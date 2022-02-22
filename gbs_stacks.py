@@ -46,7 +46,7 @@ class GBS(object):
         # SNP filtering
         self.min_maf = args.min_maf
         self.min_depth = args.min_depth
-        self.max_missing = 1.00 - args.max_missing
+        self.max_missing = round(1 - args.max_missing, 2)
 
         # Data
         self.sample_dict = dict()
@@ -242,14 +242,19 @@ class GBS(object):
         tree = populations + '/tree/'
         Methods.make_folder(tree)
 
-        depth_filt_out = populations + 'populations.1.depth{}_filtered.vcf'.format(self.min_depth)
-        maf_filt_out = populations + 'populations.2.maf{}_filtered.vcf'.format(self.min_maf)
-        missing_filt_out = populations + 'populations.3.missing{}_filtered.vcf'.format(self.max_missing)
+        depth_filt_out = populations + 'populations.depth{}.vcf'.format(self.min_depth)
+        maf_filt_out = populations + 'populations.depth{}.maf{}.vcf'.format(
+            self.min_depth, self.min_maf)
+        missing_filt_out = populations + 'populations.depth{}.maf{}_missing{}.vcf'.format(
+            self.min_depth, self.min_maf, self.max_missing)
         ld_stat_out = populations + 'populations.ld_stats.vcf'
         stat_out = populations + 'populations.pop_stats.vcf'
-        homo_filt_out = populations + 'populations.3.homo.vcf'
-        fastq_out = tree + 'populations.3.fasta'
-        fasta_homo_out = tree + 'populations.3.homo.fasta'
+        homo_filt_out = populations + 'populations.depth{}.maf{}_missing{}.homo.vcf'.format(
+            self.min_depth, self.min_maf, self.max_missing)
+        fastq_out = tree + 'populations.depth{}.maf{}_missing{}.fasta'.format(
+            self.min_depth, self.min_maf, self.max_missing)
+        fasta_homo_out = tree + 'populations.depth{}.maf{}_missing{}.homo.fasta'.format(
+            self.min_depth, self.min_maf, self.max_missing)
 
         Methods.vcftools_filter_depth(populations + 'populations.snps.vcf', depth_filt_out, self.min_depth)
         Methods.vcftools_filter_maf(depth_filt_out, maf_filt_out, self.min_maf)
@@ -269,10 +274,13 @@ class GBS(object):
         Methods.make_tree_raxml(fastq_out, tree, self.cpu)
 
         # Making stats
-        vcf_dict = Methods.parse_vcf(populations + 'populations.3.missing_filtered.vcf')
+        vcf_dict = Methods.parse_vcf(populations + 'populations.depth{}.maf{}_missing{}.vcf'.format(
+            self.min_depth, self.min_maf, self.max_missing))
 
         # Coverage graph
-        Methods.coverage_graph(vcf_dict, self.out_folder)
+        stats = self.out_folder + '/5_stats/'
+        Methods.make_folder(stats)
+        Methods.coverage_graph(vcf_dict, stats)
 
 
 if __name__ == "__main__":

@@ -748,8 +748,10 @@ class Methods(object):
             for i in range(len(info_dict['GT'])):
                 gt = info_dict['GT'][i]
                 dp = info_dict['DP'][i]
+                data = {'Sample': [sample], 'GT': [gt], 'DP': [dp]}
+                tmp_df = pd.DataFrame.from_dict(data)
 
-                df = df.append({'Sample': sample, 'GT': gt, 'DP': dp}, ignore_index=True)
+                df = pd.concat([df, tmp_df])
 
         df.replace(r'\.|\./\.', np.nan, regex=True, inplace=True)
         df1 = df.loc[:, ['Sample', 'DP']].dropna()
