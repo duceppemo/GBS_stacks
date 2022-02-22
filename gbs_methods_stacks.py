@@ -716,7 +716,7 @@ class Methods(object):
         return vcf_dict
 
     @staticmethod
-    def coverage_graph(vcf_dict, output_folder):
+    def coverage_graph(vcf_dict, output_folder, depth, maf, missing):
         # graph_dict = dict()
         # n_loci = 0
         # for sample, info_dict in vcf_dict.items():
@@ -748,29 +748,44 @@ class Methods(object):
             for i in range(len(info_dict['GT'])):
                 gt = info_dict['GT'][i]
                 dp = info_dict['DP'][i]
-                data = {'Sample': [sample], 'GT': [gt], 'DP': [dp]}
-                tmp_df = pd.DataFrame.from_dict(data)
+                data = {'Sample': [sample], 'GT': [gt], 'DP': [dp]}  # Convert to dictionary
+                tmp_df = pd.DataFrame.from_dict(data)  # Convert to dataframe
 
-                df = pd.concat([df, tmp_df])
+                df = pd.concat([df, tmp_df])  # Add at bottom of master dataframe
 
-        df.replace(r'\.|\./\.', np.nan, regex=True, inplace=True)
-        df1 = df.loc[:, ['Sample', 'DP']].dropna()
-        df1['DP'] = df1['DP'].astype(int)
-        fig = px.violin(df1, x='Sample', y='DP')
-        fig.write_html(output_folder + '/' + 'coverage.html', auto_open=False)
+        df.replace(r'\.|\./\.', np.nan, regex=True, inplace=True)  # Replace missing by nan
+        df1 = df.loc[:, ['Sample', 'DP']].dropna()  # Extract depth and drop loci with no coverage
+        df1['DP'] = df1['DP'].astype(int)  # Convert type to integer
+
+        # Coverage
+        title = 'SNP Depth of Coverage (minMAF: {}%; minDepth; {}x, maxMissing; {}%)'.format(
+            round(maf*100, 0), depth, missing)
+        label = {'DP': 'Depth of Coverage (x)'}  # override the dataframe column names
+        fig1 = px.violin(df1, x='Sample', y='DP', title=title, labels=label)
+        # fig1.write_html(output_folder + '/' + 'coverage.html', auto_open=False)
 
         # % missing per sample
-        n_loci = len(df)
+        s = df.iloc[0]['Sample']  # Get name of first sample
+        df_s1 = df[df['Sample'] == s]  # get all loci of sample 1
+        n_loci = len(df_s1)  # How many loci on first sample (they all same number of loci)
         df2 = df.GT.isnull().groupby(df['Sample']).sum().astype(int).reset_index(name='% Missing')
         df2['% Missing'] = df2['% Missing'].apply(lambda x: int(x / n_loci * 100))
-        fig = px.bar(df2, x='Sample', y='% Missing')
-        fig.write_html(output_folder + '/' + 'missing.html', auto_open=False)
+        title = 'Missing Data Percentage, incl. no coverage (minMAF: {}%; minDepth; {}x, maxMissing; {}%)'.format(
+            round(maf * 100, 0), depth, missing)
+        label = {'% Missing': 'No Coverage Loci (%)'}  # override the dataframe column names
+        fig2 = px.bar(df2, x='Sample', y='% Missing', title=title, labels=label)
+        # fig2.write_html(output_folder + '/' + 'missing.html', auto_open=False)
 
         # % Hetorozygote per sample
         df['GT'] = df['GT'].astype('category')
         df3 = df.groupby(['Sample', 'GT']).size().reset_index(name="% Hetero")
         df3['% Hetero'] = df3['% Hetero'].apply(lambda x: int(x / n_loci * 100))
-        fig = px.bar(df3, x='Sample', y='% Hetero')
-        fig.write_html(output_folder + '/' + 'hetero.html', auto_open=False)
+        title = 'Heterozygous SNP Percentage (minMAF: {}%; minDepth; {}x, maxMissing; {}%)'.format(
+            round(maf * 100, 0), depth, missing)
+        label = {'% Hetero': 'Heterozygous Percentage (%)'}  # override the dataframe column names
+        fig3 = px.bar(df3, x='Sample', y='% Hetero', title=title, labels=label)
+        # fig3.write_html(output_folder + '/' + 'hetero.html', auto_open=False)
+
+        return [fig1, fig2, fig3]
 
         # Number of SNPs after each round of filtering

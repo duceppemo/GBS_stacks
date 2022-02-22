@@ -239,9 +239,6 @@ class GBS(object):
         # Filter
         print('Filtering variants...')
 
-        tree = populations + '/tree/'
-        Methods.make_folder(tree)
-
         depth_filt_out = populations + 'populations.depth{}.vcf'.format(self.min_depth)
         maf_filt_out = populations + 'populations.depth{}.maf{}.vcf'.format(
             self.min_depth, self.min_maf)
@@ -251,18 +248,21 @@ class GBS(object):
         stat_out = populations + 'populations.pop_stats.vcf'
         homo_filt_out = populations + 'populations.depth{}.maf{}_missing{}.homo.vcf'.format(
             self.min_depth, self.min_maf, self.max_missing)
+
+        Methods.vcftools_filter_depth(populations + 'populations.snps.vcf', depth_filt_out, self.min_depth)
+        Methods.vcftools_filter_maf(depth_filt_out, maf_filt_out, self.min_maf)
+        Methods.vcftools_filter_missing(maf_filt_out, missing_filt_out, self.max_missing)
+
+        # Make tree
+        tree = self.out_folder + '/5_tree/'
+        Methods.make_folder(tree)
+
         fastq_out = tree + 'populations.depth{}.maf{}_missing{}.fasta'.format(
             self.min_depth, self.min_maf, self.max_missing)
         fasta_homo_out = tree + 'populations.depth{}.maf{}_missing{}.homo.fasta'.format(
             self.min_depth, self.min_maf, self.max_missing)
 
-        Methods.vcftools_filter_depth(populations + 'populations.snps.vcf', depth_filt_out, self.min_depth)
-        Methods.vcftools_filter_maf(depth_filt_out, maf_filt_out, self.min_maf)
-        Methods.vcftools_filter_missing(maf_filt_out, missing_filt_out, self.max_missing)
-        Methods.ld_stat(missing_filt_out, ld_stat_out)
-        Methods.vcftools_stats(missing_filt_out, stat_out)
-
-        # Filter VCF to only keep homozygous loci
+        # Only keep homozygous loci
         Methods.filter_out_heterozygous(missing_filt_out, homo_filt_out)
 
         # Convert VCF to fasta and make tree
@@ -274,13 +274,22 @@ class GBS(object):
         Methods.make_tree_raxml(fastq_out, tree, self.cpu)
 
         # Making stats
+        print('Making stats...')
+        Methods.ld_stat(missing_filt_out, ld_stat_out)
+        Methods.vcftools_stats(missing_filt_out, stat_out)
+
         vcf_dict = Methods.parse_vcf(populations + 'populations.depth{}.maf{}_missing{}.vcf'.format(
             self.min_depth, self.min_maf, self.max_missing))
 
         # Coverage graph
-        stats = self.out_folder + '/5_stats/'
+        print('Making summary stat graphs...')
+        stats = self.out_folder + '/6_stats/'
         Methods.make_folder(stats)
-        Methods.coverage_graph(vcf_dict, stats)
+
+        fig_list = Methods.coverage_graph(vcf_dict, stats, self.min_depth, self.min_maf, self.max_missing)
+        with open(stats + 'sumstats.html', 'w') as f:
+            for fig in fig_list:
+                f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
 
 
 if __name__ == "__main__":
