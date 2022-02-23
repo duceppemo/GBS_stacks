@@ -713,30 +713,8 @@ class Methods(object):
 
     @staticmethod
     def coverage_graph(vcf_dict, output_folder, depth, maf, missing):
-        # graph_dict = dict()
-        # n_loci = 0
-        # for sample, info_dict in vcf_dict.items():
-        #     if sample not in graph_dict:
-        #         graph_dict[sample] = {'cov': {}, 'miss': {}, 'hetero': {}}
-        #
-        #     c = 0
-        #     for x in info_dict['DP']:
-        #         n_loci += 1
-        #         try:
-        #             c += int(x)
-        #         except ValueError:
-        #             continue
-        #     graph_dict[sample]['cov'] = c
-        #
-        #     hetero = 0
-        #     missing = 0
-        #     for x in info_dict['GT']:
-        #         if x == './.':
-        #             missing += 1
-        #         elif x == ('0/1' or '1/0'):
-        #             hetero += 1
-        #     graph_dict[sample]['miss'] = missing
-        #     graph_dict[sample]['hetero'] = hetero
+        # Convert back missing
+        missing = round(100 - (missing * 100), 1)
 
         # Coverage per sample
         df = pd.DataFrame(columns=['Sample', 'GT', 'DP'], index=None)
@@ -754,7 +732,7 @@ class Methods(object):
         df1['DP'] = df1['DP'].astype(int)  # Convert type to integer
 
         # Coverage
-        title = 'SNP Depth of Coverage (minMAF: {}%; minDepth; {}x, maxMissing; {}%)'.format(
+        title = 'SNP Depth of Coverage (minMAF: {}%, minDepth: {}x, maxMissing: {}%)'.format(
             round(maf*100, 0), depth, missing)
         label = {'DP': 'Depth of Coverage (x)'}  # override the dataframe column names
         fig1 = px.violin(df1, x='Sample', y='DP', title=title, labels=label)
@@ -766,7 +744,7 @@ class Methods(object):
         n_loci = len(df_s1)  # How many loci on first sample (they all same number of loci)
         df2 = df.GT.isnull().groupby(df['Sample']).sum().astype(int).reset_index(name='% Missing')
         df2['% Missing'] = df2['% Missing'].apply(lambda x: int(x / n_loci * 100))
-        title = 'Missing Data Percentage, incl. no coverage (minMAF: {}%; minDepth; {}x, maxMissing; {}%)'.format(
+        title = 'Missing Data Percentage, incl. no coverage (minMAF: {}%, minDepth: {}x, maxMissing: {}%)'.format(
             round(maf * 100, 0), depth, missing)
         label = {'% Missing': 'No Coverage Loci (%)'}  # override the dataframe column names
         fig2 = px.bar(df2, x='Sample', y='% Missing', title=title, labels=label)
@@ -776,7 +754,7 @@ class Methods(object):
         df['GT'] = df['GT'].astype('category')
         df3 = df.groupby(['Sample', 'GT']).size().reset_index(name="% Hetero")
         df3['% Hetero'] = df3['% Hetero'].apply(lambda x: int(x / n_loci * 100))
-        title = 'Heterozygous SNP Percentage (minMAF: {}%; minDepth; {}x, maxMissing; {}%)'.format(
+        title = 'Heterozygous SNP Percentage (minMAF: {}%, minDepth: {}x, maxMissing: {}%)'.format(
             round(maf * 100, 0), depth, missing)
         label = {'% Hetero': 'Heterozygous Percentage (%)'}  # override the dataframe column names
         fig3 = px.bar(df3, x='Sample', y='% Hetero', title=title, labels=label)
