@@ -190,28 +190,6 @@ class Methods(object):
         with open(log_file, 'w') as f:
             subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT)
 
-    # @staticmethod
-    # def trim_iontorrent_size(r1, trimmed_folder, cpu, size):
-    #     """
-    #     trim all reads to 100bp
-    #     """
-    #     sample = os.path.basename(r1).split('_R1')[0]
-    #     sample = sample.split('.')[0]
-    #
-    #     cmd = ['bbduk.sh',
-    #            'in={}'.format(r1),
-    #            'out={}'.format(trimmed_folder + sample + '.fastq.gz'),
-    #            'literal={}'.format(Methods.ion_adapter),
-    #            'k=21', 'mink=15', 'hdist=1', 'ktrim=r', 'trimq=6',
-    #            'minlength={}'.format(size), 'forcetrimright={}'.format(size-1),
-    #            'overwrite=t', 'threads={}'.format(cpu)]
-    #
-    #     print('\t{}'.format(sample))
-    #     # subprocess.run(cmd, stderr=subprocess.DEVNULL)
-    #     log_file = trimmed_folder + sample + '_bbduk.log'
-    #     with open(log_file, 'w') as f:
-    #         subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT)
-
     @staticmethod
     def read_length_dist(r1):
         """
@@ -680,6 +658,14 @@ class Methods(object):
                '-x', str(1234), '-p', str(123)]
 
         subprocess.run(cmd)
+
+    @staticmethod
+    def plot_newick_tree(tree_file, output_png):
+        from ete3 import Tree, TreeStyle
+        t = Tree(tree_file)
+        ts = TreeStyle()
+        ts.show_branch_support = False
+        t.render(output_png, w=183, units="mm", tree_style=ts)
 
     @staticmethod
     def parse_vcf(vcf_file):

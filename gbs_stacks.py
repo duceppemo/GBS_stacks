@@ -273,6 +273,17 @@ class GBS(object):
         Methods.make_tree_raxml(fasta_homo_out, tree, self.cpu)
         Methods.make_tree_raxml(fastq_out, tree, self.cpu)
 
+        # Plot trees
+        print('Plotting trees...')
+        tree_file_in = tree + 'RAxML_bestTree.populations.depth{}.maf{}_missing{}.tree'.format(
+            self.min_depth, self.min_maf, self.max_missing)
+        tree_render_out = '.'.join(tree_file_in.split('.')[:-1]) + '.png'
+        tree_file_homo_in = tree + 'RAxML_bestTree.populations.depth{}.maf{}_missing{}.homo.tree'.format(
+            self.min_depth, self.min_maf, self.max_missing)
+        tree_render_homo_out = '.'.join(tree_file_homo_in.split('.')[:-1]) + '.png'
+        Methods.plot_newick_tree(tree_file_in, tree_render_out)
+        Methods.plot_newick_tree(tree_file_homo_in, tree_render_homo_out)
+
         # Making stats
         print('Making stats...')
         Methods.ld_stat(missing_filt_out, ld_stat_out)

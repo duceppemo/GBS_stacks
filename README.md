@@ -20,7 +20,7 @@ Pipeline requirements are installed through conda:
 ```
 # Create a new conda environment that will hold all the dependencies
 conda create -n gbs_stacks -c bioconda -c ploly stacks raxml bowtie2 fastp bbmap pysam git \
-    psutil pandas matplotlib scipy numpy plotly
+    psutil pandas matplotlib scipy numpy plotly ete3
 
 # Activate environment
 conda activate gbs_stacks
