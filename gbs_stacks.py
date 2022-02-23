@@ -4,6 +4,7 @@ import os
 from argparse import ArgumentParser
 from multiprocessing import cpu_count
 from gbs_methods_stacks import Methods
+import plotly.express as px
 
 
 __author__ = 'duceppemo'
@@ -12,14 +13,12 @@ __version__ = 'v0.1'
 
 class GBS(object):
     def __init__(self, args):
-        # Command line arguments
-
         # Analysis type
         self.referenced = args.referenced
         self.de_novo = args.de_novo
 
         # I/O
-        self.input = args.input  # fastq folder
+        self.input = os.path.abspath(args.input)  # fastq folder
         if args.paired_end:
             self.read_type = 'pe'
         elif args.single_end:
@@ -29,7 +28,10 @@ class GBS(object):
             raise Exception('Please choose between "-se" and "-pe"\n')
         self.ion = args.ion_torrent
         self.ref = args.reference  # reference genome
-        self.out_folder = args.output  # output folder
+        self.out_folder = os.path.abspath(args.output)  # output folder
+
+        # Read length auto removal
+        self.size = args.size
 
         # Metadata
         self.map = args.population_map
@@ -60,7 +62,8 @@ class GBS(object):
         self.cpu, self.parallel = Methods.check_cpus(self.cpu, self.parallel)
 
         # Check if folders are not empty
-        result = Methods.check_folder_empty(self.input)
+        # Convert input to absolute path if relative
+        result, self.input = Methods.check_input_folder(self.input)
         if result == 0:
             raise Exception('Input folder does not contain files with accepted file extensions: {}'.format(
                 Methods.accepted_extensions))
@@ -101,6 +104,20 @@ class GBS(object):
         # Create ouput folder
         Methods.make_folder(self.out_folder)
 
+        # Auto size selection
+        if self.size == 'auto':
+            # Find the best read length for trimming
+            df = Methods.parallel_read_length_dist(self.sample_dict['raw'], self.cpu)
+
+            # Create plot
+            Methods.make_folder(read_length)
+            fig1 = px.line(df, x=df.index, y='Count')
+            with open(read_length + '/' + 'first_figure.html', 'w') as fh:
+                fh.write(fig1.to_html(full_html=False, include_plotlyjs='cdn'))
+
+            # Detect peak
+            self.size = Methods.find_peak(df, read_length)
+
         # Trim reads
         if self.ion:  # if Ion Torrent reads
             """
@@ -110,33 +127,16 @@ class GBS(object):
             and short reads.
             """
             print('Processing IonTorrent reads...')
-
             if not os.path.exists(done_trimming):
-                if self.referenced:
-                    # Trim reads with bbduk
-                    Methods.parallel_trim_reads(Methods.trim_iontorrent, self.sample_dict['raw'], trimmed,
-                                                self.cpu, self.parallel)
-                else:  # de novo
-                    # Find the best read length for trimming
-                    df = Methods.parallel_read_length_dist(self.sample_dict['raw'], self.cpu)
-                    # Create plot
-                    import plotly.express as px
-                    Methods.make_folder(read_length)
-                    fig = px.line(df, x=df.index, y='Count')
-                    fig.write_html(read_length + '/' + 'first_figure.html', auto_open=False)
-                    # Detect peak
-                    trim_size = Methods.find_peak(df, read_length)
-
-                    # Trim all reads to specific length
-                    Methods.parallel_trim_reads(Methods.trim_iontorrent_size, self.sample_dict['raw'], trimmed,
-                                                self.cpu, self.parallel, size=trim_size)
+                Methods.parallel_trim_reads(Methods.trim_iontorrent, self.sample_dict['raw'], trimmed,
+                                            self.cpu, self.parallel, self.size)
                 Methods.flag_done(done_trimming)
             else:
                 print('Skipping trimming. Already done.')
         else:  # if Illumina reads
             """
             The raw Illumina reads wont typically be demultiplexed by sample and can be cleaned and demultiplexed
-            with "process_ragtags" included with Stacks. 
+            with "process_ragtags" included with Stacks, so trimming with bbduk is disabled.
             """
             print('Processing Illumina reads...')
             if self.read_type == 'se':  # if single-end
@@ -144,7 +144,7 @@ class GBS(object):
                 if not os.path.exists(done_trimming):
                     # It's better no to trim the reads because the de novo process needs reads all the same length
                     # Methods.parallel_trim_reads(Methods.trim_illumina_se, self.sample_dict,
-                    #                             cleaned, self.cpu, self.parallel)
+                    #                             cleaned, self.cpu, self.parallel, self.size)
                     Methods.process_radtags_se(self.input, self.barcodes, trimmed, self.enz1, renz_2=self.enz2)
                     Methods.flag_done(done_trimming)
                 else:
@@ -154,7 +154,7 @@ class GBS(object):
                 if not os.path.exists(done_trimming):
                     # It's better no to trim the reads because the de novo process needs reads all the same length
                     # Methods.parallel_trim_reads(Methods.trim_illumina_pe, self.sample_dict,
-                    #                             cleaned, self.cpu, self.parallel)
+                    #                             cleaned, self.cpu, self.parallel, self.size)
                     Methods.process_radtags_pe(self.input, self.barcodes, trimmed, self.enz1, renz_2=self.enz2)
                     Methods.flag_done(done_trimming)
                 else:
@@ -307,13 +307,21 @@ if __name__ == "__main__":
                         help='Dectect SNPs de novo (ustacks->cstacks->gstacks->populations')
     parser.add_argument('-r', '--reference', metavar='/reference_genome.fasta',
                         required=False,
-                        help='Reference genome for read mapping. Mandatory.')
+                        help='Reference genome for read mapping. '
+                             'Mandatory.')
     parser.add_argument('-i', '--input', metavar='/input_folder/',
                         required=True,
                         help='Folder that contains the fastq files. Mandatory.')
     parser.add_argument('-o', '--output', metavar='/output_folder/',
                         required=True,
-                        help='Folder to hold the result files. Mandatory.')
+                        help='Folder to hold the result files. '
+                             'Mandatory.')
+    parser.add_argument('-s', '--size', metavar='64|auto',
+                        required=False, default=64,
+                        help='Minimum read size to keep after trimming. '
+                             'An experimetial auto size selection (use "auto" as argument) is also available. '
+                             'It is based on highest peak detection after plotting read length distribution. '
+                             'Experimental. Default is 64. Optional.')
     parser.add_argument('-e1', '--enzyme1', metavar='mspI',
                         required=True,
                         help='Restriction enzyme used for the GBS procedure. Mandatory.')
@@ -323,11 +331,13 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--population-map', metavar='/population_map.tsv',
                         required=True,
                         help='A two-column tab-separated file containing a population map of giving samples.'
-                             ' See https://catchenlab.life.illinois.edu/stacks/manual/#popmap for details.')
+                             ' See https://catchenlab.life.illinois.edu/stacks/manual/#popmap for details. '
+                             'Mandatory.')
     parser.add_argument('-b', '--barcodes', metavar='/barcodes.tsv',
                         required=True,
                         help='A two-column tab-separated file containing barcode info of giving samples.'
-                             ' See https://catchenlab.life.illinois.edu/stacks/manual/#specbc for details.')
+                             ' See https://catchenlab.life.illinois.edu/stacks/manual/#specbc for details. '
+                             'Mandatory.')
     parser.add_argument('-t', '--threads', metavar=str(max_cpu),
                         required=False,
                         type=int, default=max_cpu,
@@ -357,6 +367,11 @@ if __name__ == "__main__":
     parser.add_argument('--max-missing', default=10, metavar='0.30',
                         type=float, required=False,
                         help='Maximum percentage of missing values.')
+    # parser.add_argument('--auto-remove-short-reads',
+    #                     required=False,
+    #                     action='store_true',  # implies default=False
+    #                     help='Auto remove shorter reads based on highest peak detection after plotting read '
+    #                          'length distribution. Only works with IonTorrent data. Experimental.')
 
     # Get the arguments into an object
     arguments = parser.parse_args()

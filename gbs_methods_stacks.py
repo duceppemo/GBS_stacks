@@ -29,7 +29,7 @@ class Methods(object):
                     'sbfI', 'sexAI', 'sgrAI', 'speI', 'sphI', 'taqI', 'xbaI', 'xhoI']
 
     @staticmethod
-    def check_folder_empty(folder):
+    def check_input_folder(folder):
         status = 0
         # List content of folder
         dir_content = os.listdir(folder)
@@ -37,7 +37,7 @@ class Methods(object):
         test_file_ext = [x.endswith(tuple(Methods.accepted_extensions)) for x in dir_content]
         if dir_content and any(test_file_ext):
             status = 1
-        return status
+        return status, folder
 
     @staticmethod
     def check_cpus(requested_cpu, n_proc):
@@ -136,7 +136,7 @@ class Methods(object):
             pass
 
     @staticmethod
-    def trim_illumina_se(r1, output_folder, cpu):
+    def trim_illumina_se(r1, output_folder, cpu, size):
         sample = os.path.basename(r1).split('_R1')[0]
 
         Methods.make_folder(output_folder)
@@ -145,7 +145,7 @@ class Methods(object):
                '--thread', str(cpu),
                '--in1', r1,
                '--out1', output_folder + '/' + sample + 'fastq.gz',
-               '--length_required', str(64),
+               '--length_required', str(size),
                '--cut_right',
                '--html', output_folder + '/' + sample + '.html']
 
@@ -153,7 +153,7 @@ class Methods(object):
         subprocess.run(cmd, stderr=subprocess.DEVNULL)
 
     @staticmethod
-    def trim_illumina_pe(r1, output_folder, cpu):
+    def trim_illumina_pe(r1, output_folder, cpu, size):
         r2 = r1.replace('_R1', '_R2')
         sample = os.path.basename(r1).split('_R1')[0]
 
@@ -165,7 +165,7 @@ class Methods(object):
                '--in2', r2,
                '--out1', output_folder + '/' + sample + '_R1.fastq.gz',
                '--out2', output_folder + '/' + sample + '_R2.fastq.gz',
-               '--length_required', str(64),
+               '--length_required', str(size),
                '--cut_right',
                '--html', output_folder + '/' + sample + '.html']
 
@@ -173,7 +173,7 @@ class Methods(object):
         subprocess.run(cmd, stderr=subprocess.DEVNULL)
 
     @staticmethod
-    def trim_iontorrent(r1, trimmed_folder, cpu):
+    def trim_iontorrent(r1, trimmed_folder, cpu, size):
         sample = os.path.basename(r1).split('_R1')[0]
         sample = sample.split('.')[0]
 
@@ -181,7 +181,7 @@ class Methods(object):
                'in={}'.format(r1),
                'out={}'.format(trimmed_folder + sample + '.fastq.gz'),
                'literal={}'.format(Methods.ion_adapter),
-               'k=21', 'mink=15', 'hdist=1', 'ktrim=r', 'trimq=6', 'minlength=64',
+               'k=21', 'mink=15', 'hdist=1', 'ktrim=r', 'trimq=6', 'minlength={}'.format(size),
                'overwrite=t', 'threads={}'.format(cpu)]
 
         print('\t{}'.format(sample))
@@ -190,31 +190,50 @@ class Methods(object):
         with open(log_file, 'w') as f:
             subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT)
 
+    # @staticmethod
+    # def trim_iontorrent_size(r1, trimmed_folder, cpu, size):
+    #     """
+    #     trim all reads to 100bp
+    #     """
+    #     sample = os.path.basename(r1).split('_R1')[0]
+    #     sample = sample.split('.')[0]
+    #
+    #     cmd = ['bbduk.sh',
+    #            'in={}'.format(r1),
+    #            'out={}'.format(trimmed_folder + sample + '.fastq.gz'),
+    #            'literal={}'.format(Methods.ion_adapter),
+    #            'k=21', 'mink=15', 'hdist=1', 'ktrim=r', 'trimq=6',
+    #            'minlength={}'.format(size), 'forcetrimright={}'.format(size-1),
+    #            'overwrite=t', 'threads={}'.format(cpu)]
+    #
+    #     print('\t{}'.format(sample))
+    #     # subprocess.run(cmd, stderr=subprocess.DEVNULL)
+    #     log_file = trimmed_folder + sample + '_bbduk.log'
+    #     with open(log_file, 'w') as f:
+    #         subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT)
+
     @staticmethod
     def read_length_dist(r1):
         """
         Make read length start of all reads combined, plot the distribution and find the peak.
         Returns the optimal read length for trimming the reads for the ustacks.
         """
-        sample = os.path.basename(r1).split('_R1')[0]
-        sample = sample.split('.')[0]
-
-        len_dict = dict()
-
         cmd = ['readlength.sh',
                'in={}'.format(r1),
                'bin=5']
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         len_dist = p.communicate()[0].decode('utf-8')
-        lines = len_dist.split('\n')
+        lines = len_dist.split('\n')  # convert to list
+        len_dict = dict()  # Store sizes (keys) and lengths (values) into dictionary
+
         for line in lines:
-            if line.startswith('#'):
+            if line.startswith('#'):  # skip headers
                 continue
-            elif not line:
+            elif not line:  # Skip empty lines
                 continue
             else:
                 fields = line.split('\t')[:2]
-                len_dict[fields[0]] = fields[1]
+                len_dict[fields[0]] = fields[1]  # get sizes and counts
 
         return len_dict
 
@@ -222,16 +241,17 @@ class Methods(object):
     def parallel_read_length_dist(sample_dict, cpu):
         master_len_dict = dict()
         with futures.ThreadPoolExecutor(max_workers=cpu) as executor:
-            for results in executor.map(Methods.read_length_dist,
-                                        [path_list[0] for sample, path_list in sample_dict.items()]):
+            for results in executor.map(
+                    Methods.read_length_dist, [path_list[0] for sample, path_list in sample_dict.items()]):
                 for k, v in results.items():
                     if k in master_len_dict:
                         master_len_dict[int(k)] += int(v)
                     else:
                         master_len_dict[int(k)] = int(v)
+        # Convert dictionary to pandas dataframe
         df = pd.DataFrame.from_dict(master_len_dict, orient='index')  # , columns=['Length', 'Count'])
-        df.index.names = ['Length']
-        df.rename(columns={df.columns[0]: 'Count'}, inplace=True)
+        df.index.names = ['Length']  # Rename index column
+        df.rename(columns={df.columns[0]: 'Count'}, inplace=True)  # rename count column
 
         return df
 
@@ -247,6 +267,9 @@ class Methods(object):
         highest_peak = int(properties['prominences'].max())
         p = np.interp(highest_peak, ys, xs)
         size_to_keep = int(df[df['Count'] == int(p)].index.values) - 5  # 5 is bin size from readlength.sh
+
+        # Create figure with matplotlib
+        # TODO: use plotly instead
         fig, ax = plt.subplots()
         g = plt.plot(x)
         plt.plot(peaks, x[peaks], "x")
@@ -257,40 +280,13 @@ class Methods(object):
         return size_to_keep
 
     @staticmethod
-    def trim_iontorrent_size(r1, trimmed_folder, cpu, size):
-        """
-        trim all reads to 100bp
-        """
-        sample = os.path.basename(r1).split('_R1')[0]
-        sample = sample.split('.')[0]
-
-        cmd = ['bbduk.sh',
-               'in={}'.format(r1),
-               'out={}'.format(trimmed_folder + sample + '.fastq.gz'),
-               'literal={}'.format(Methods.ion_adapter),
-               'k=21', 'mink=15', 'hdist=1', 'ktrim=r', 'trimq=6',
-               'minlength={}'.format(size), 'forcetrimright={}'.format(size-1),
-               'overwrite=t', 'threads={}'.format(cpu)]
-
-        print('\t{}'.format(sample))
-        # subprocess.run(cmd, stderr=subprocess.DEVNULL)
-        log_file = trimmed_folder + sample + '_bbduk.log'
-        with open(log_file, 'w') as f:
-            subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT)
-
-    @staticmethod
-    def parallel_trim_reads(trim_function, sample_dict, output_folder, cpu, parallel, **kwargs):
+    def parallel_trim_reads(trim_function, sample_dict, output_folder, cpu, parallel, size):
         print('Trimming reads...')
         Methods.make_folder(output_folder)
-        # test = kwargs['size']
 
         with futures.ThreadPoolExecutor(max_workers=parallel) as executor:
-            if kwargs:
-                args = ((path_list[0], output_folder, int(cpu / parallel), kwargs['size'])
-                        for sample, path_list in sample_dict.items())
-            else:
-                args = ((path_list[0], output_folder, int(cpu / parallel))
-                        for sample, path_list in sample_dict.items())
+            args = ((path_list[0], output_folder, int(cpu / parallel), size)
+                    for sample, path_list in sample_dict.items())
             for results in executor.map(lambda x: trim_function(*x), args):
                 pass
 

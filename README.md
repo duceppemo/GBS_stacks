@@ -35,27 +35,34 @@ python gbs_stacks.py -h
 A help message should display without errors if the conda environment was set up properly and the git repository was cloned successfully.
 ## Usage
 ```
-usage: python gbs_stacks.py [-h] -r /reference_genome.fasta -i /input_folder/ -o /output_folder/ -e1 mspI [-e2 pstI] -p /population_map.tsv -b /barcodes.tsv [-t 48] [-pe] [-se] [-ion] [--min-maf 0.05] [--min-depth 10] [--max-missing 0.30]
+usage: python gbs_stacks.py [-h] [--referenced] [--de-novo] [-r /reference_genome.fasta] -i /input_folder/ -o /output_folder/ [-s 64|auto] -e1 mspI [-e2 pstI] -p /population_map.tsv -b /barcodes.tsv [-t 48] [--parallel 2] [-pe] [-se] [-ion]
+                            [--min-maf 0.05] [--min-depth 10] [--max-missing 0.30]
 
-Reference-based genotyping-by-sequencing (GBS) pipeline using Stacks
+Referenced or de novo GBS pipeline using Stacks
 
 optional arguments:
   -h, --help            show this help message and exit
+  --referenced          Dectect SNPs from mapping (bwa->gstacks->populations
+  --de-novo             Dectect SNPs de novo (ustacks->cstacks->gstacks->populations
   -r /reference_genome.fasta, --reference /reference_genome.fasta
                         Reference genome for read mapping. Mandatory.
   -i /input_folder/, --input /input_folder/
                         Folder that contains the fastq files. Mandatory.
   -o /output_folder/, --output /output_folder/
                         Folder to hold the result files. Mandatory.
+  -s 64|auto, --size 64|auto
+                        Minimum read size to keep after trimming. An experimetial auto size selection (use "auto" as argument) is also available. It is based on highest peak detection after plotting read length distribution.
+                        Experimental. Default is 64. Optional.
   -e1 mspI, --enzyme1 mspI
                         Restriction enzyme used for the GBS procedure. Mandatory.
   -e2 pstI, --enzyme2 pstI
                         Restriction enzyme used for the GBS procedure. Optional.
   -p /population_map.tsv, --population-map /population_map.tsv
-                        A two-column tab-separated file containing a population map of giving samples. See https://catchenlab.life.illinois.edu/stacks/manual/#popmap for details.
+                        A two-column tab-separated file containing a population map of giving samples. See https://catchenlab.life.illinois.edu/stacks/manual/#popmap for details. Mandatory.
   -b /barcodes.tsv, --barcodes /barcodes.tsv
-                        A two-column tab-separated file containing barcode info of giving samples. See https://catchenlab.life.illinois.edu/stacks/manual/#specbc for details.
+                        A two-column tab-separated file containing barcode info of giving samples. See https://catchenlab.life.illinois.edu/stacks/manual/#specbc for details. Mandatory.
   -t 48, --threads 48   Number of CPU. Default is maximum CPU available(48). Optional
+  --parallel 2          Number of samples to process in parallel.
   -pe, --paired-end     Input fastq files are paired-end. Must chose "-pe" or "-se".
   -se, --single-end     Input fastq files are single-end.
   -ion, --ion-torrent   Reads are from IonTorrent (different trim parameters). Default is Illumina.
@@ -72,13 +79,14 @@ conda activate gbs
 python gbs_stacks.py -r Secale_cereale_Weining.fasta \
     -b barcodes.tsv \
     -p pop_map_stacks.tsv \
-    -i /input_fastq_folder \
+    -i ~/input_fastq_folder \
     -se \
     -ion \
-    -o /output_gbs_folder \
+    -o ~/output_gbs_folder \
     -e1 pstI \
     -e2 mspI
 ```
+You must change the paths found in the help or in this example to your own paths. Just copy/pasting this command will not work on your system.
 ## Inputs
 Here are example of the required inputs:
 * Barcode description (barcode.tsv):
