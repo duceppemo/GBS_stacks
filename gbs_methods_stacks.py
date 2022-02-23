@@ -15,6 +15,8 @@ import plotly.express as px
 import matplotlib.pyplot as plt
 import numpy as np
 import gzip
+from ete3 import Tree, TreeStyle
+from ete3.parser.newick import NewickError
 
 
 class Methods(object):
@@ -660,12 +662,15 @@ class Methods(object):
         subprocess.run(cmd)
 
     @staticmethod
-    def plot_newick_tree(tree_file, output_png):
-        from ete3 import Tree, TreeStyle
-        t = Tree(tree_file)
-        ts = TreeStyle()
-        ts.show_branch_support = False
-        t.render(output_png, w=183, units="mm", tree_style=ts)
+    def plot_newick_tree(tree_file, output_file):
+        try:
+            t = Tree(tree_file)
+            ts = TreeStyle()
+            ts.show_leaf_name = True
+            ts.show_branch_support = True
+            t.render(output_file, w=183, units='mm', tree_style=ts)
+        except NewickError:
+            pass
 
     @staticmethod
     def parse_vcf(vcf_file):
@@ -713,39 +718,34 @@ class Methods(object):
 
                 df = pd.concat([df, tmp_df])  # Add at bottom of master dataframe
 
+        # Genotypes frequency (%)
+        sample1 = df.iloc[0]['Sample']  # Get name of first sample
+        sample1 = df[df['Sample'] == sample1]  # get all loci of sample 1
+        n_loci_all = len(sample1)  # How many loci on first sample (they all same number of loci)
+
+        df['GT'] = df['GT'].astype('category')
+        df3 = df.groupby(['Sample', 'GT']).size().reset_index(name="% Hetero")
+        df3['% Hetero'] = df3['% Hetero'].apply(lambda x: int(x / n_loci_all * 100))
+        title = 'Genotypes Frequency Per Sample (MAF: {}%, minDepth: {}x, maxMissing: {}%)'.format(
+            round(maf * 100, 0), depth, missing)
+        label = {'% Hetero': 'Genotype Frequency (%)'}  # override the dataframe column names
+        fig3 = px.bar(df3, x='Sample', y='% Hetero',
+                      color='GT', barmode="group",
+                      title=title, labels=label)
+
+        # Remove missing and no coverage loci
         df.replace(r'\.|\./\.', np.nan, regex=True, inplace=True)  # Replace missing by nan
         df1 = df.loc[:, ['Sample', 'DP']].dropna()  # Extract depth and drop loci with no coverage
         df1['DP'] = df1['DP'].astype(int)  # Convert type to integer
 
         # Coverage
-        title = 'SNP Depth of Coverage (minMAF: {}%, minDepth: {}x, maxMissing: {}%)'.format(
+        # Exclude the missing and no coverage loci
+        title = 'SNP Depth of Coverage Per Locus Per Sample (MAF: {}%, minDepth: {}x, maxMissing: {}%)'.format(
             round(maf*100, 0), depth, missing)
         label = {'DP': 'Depth of Coverage (x)'}  # override the dataframe column names
-        fig1 = px.violin(df1, x='Sample', y='DP', title=title, labels=label)
-        # fig1.write_html(output_folder + '/' + 'coverage.html', auto_open=False)
+        # points="False"
+        fig1 = px.box(df1, x='Sample', y='DP', title=title, labels=label, points="all", notched=True)
 
-        # % missing per sample
-        s = df.iloc[0]['Sample']  # Get name of first sample
-        df_s1 = df[df['Sample'] == s]  # get all loci of sample 1
-        n_loci = len(df_s1)  # How many loci on first sample (they all same number of loci)
-        df2 = df.GT.isnull().groupby(df['Sample']).sum().astype(int).reset_index(name='% Missing')
-        df2['% Missing'] = df2['% Missing'].apply(lambda x: int(x / n_loci * 100))
-        title = 'Missing Data Percentage, incl. no coverage (minMAF: {}%, minDepth: {}x, maxMissing: {}%)'.format(
-            round(maf * 100, 0), depth, missing)
-        label = {'% Missing': 'No Coverage Loci (%)'}  # override the dataframe column names
-        fig2 = px.bar(df2, x='Sample', y='% Missing', title=title, labels=label)
-        # fig2.write_html(output_folder + '/' + 'missing.html', auto_open=False)
-
-        # % Hetorozygote per sample
-        df['GT'] = df['GT'].astype('category')
-        df3 = df.groupby(['Sample', 'GT']).size().reset_index(name="% Hetero")
-        df3['% Hetero'] = df3['% Hetero'].apply(lambda x: int(x / n_loci * 100))
-        title = 'Heterozygous SNP Percentage (minMAF: {}%, minDepth: {}x, maxMissing: {}%)'.format(
-            round(maf * 100, 0), depth, missing)
-        label = {'% Hetero': 'Heterozygous Percentage (%)'}  # override the dataframe column names
-        fig3 = px.bar(df3, x='Sample', y='% Hetero', title=title, labels=label)
-        # fig3.write_html(output_folder + '/' + 'hetero.html', auto_open=False)
-
-        return [fig1, fig2, fig3]
+        return [fig1, fig3]
 
         # Number of SNPs after each round of filtering

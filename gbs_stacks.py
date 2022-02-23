@@ -277,11 +277,12 @@ class GBS(object):
         print('Plotting trees...')
         tree_file_in = tree + 'RAxML_bestTree.populations.depth{}.maf{}_missing{}.tree'.format(
             self.min_depth, self.min_maf, self.max_missing)
-        tree_render_out = '.'.join(tree_file_in.split('.')[:-1]) + '.png'
+        tree_render_out = '.'.join(tree_file_in.split('.')[:-1]) + '.pdf'  # .PDF, .SVG or .PNG
+        Methods.plot_newick_tree(tree_file_in, tree_render_out)
+
         tree_file_homo_in = tree + 'RAxML_bestTree.populations.depth{}.maf{}_missing{}.homo.tree'.format(
             self.min_depth, self.min_maf, self.max_missing)
-        tree_render_homo_out = '.'.join(tree_file_homo_in.split('.')[:-1]) + '.png'
-        Methods.plot_newick_tree(tree_file_in, tree_render_out)
+        tree_render_homo_out = '.'.join(tree_file_homo_in.split('.')[:-1]) + '.pdf'  # .PDF, .SVG or .PNG
         Methods.plot_newick_tree(tree_file_homo_in, tree_render_homo_out)
 
         # Making stats
