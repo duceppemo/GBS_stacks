@@ -88,7 +88,7 @@ if __name__ == "__main__":
                         type=str,
                         help='VCF file for which reference regions will be extracted for each position. Mandatory.')
     parser.add_argument('--base-pairs', '-bp', metavar='200',
-                        required=True,
+                        required=False,
                         type=int,
                         default=200,
                         help='Number of base pairs to extract on each side of the SNP. Defaults is 200. Mandatory.')
