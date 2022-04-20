@@ -79,6 +79,10 @@ class Methods(object):
 
                             fh_out.write('CAN{:03d}\t{}\t{}\t{}\t{}\t{}\t+\tSNP\t2\t'.format(
                                 counter, chrom, pos, pos, ref, alt))
+                            # part1 = full_seq[start:index].upper()
+                            # part2 = ref.upper()
+                            # part3 = alt.upper()
+                            # part4 = full_seq[index+1:stop + 1].upper()
                             fh_out.write('{}[{}/{}]{}\n'.format(
                                 full_seq[start:index-1].upper(), ref.upper(), alt.upper(),
                                 full_seq[index+1:stop + 1].upper()))
