@@ -76,6 +76,43 @@ class Methods(object):
                 raise Exception('Please specify a reference fasta file for your referenced analysis.')
 
     @staticmethod
+    def check_version(log_file):
+        # Not being used right now because versions are captured in the requirements.txt file
+        with open(log_file, 'w') as f:
+            # Python
+            p = subprocess.Popen(['python', '--version'])
+            stderr, stdout = p.communicate()
+
+            # fastp
+            p = subprocess.Popen(['fastp', '--version'])
+            stderr, stdout = p.communicate()
+
+            # bbmap suite
+            p = subprocess.Popen(['bbduk.sh', '--version'])
+            stderr, stdout = p.communicate()
+
+            # Stacks
+            p = subprocess.Popen(['gstacks', '--version'])
+            stderr, stdout = p.communicate()
+
+            # SAMtools
+            p = subprocess.Popen(['samtools', '--version'])
+            stderr, stdout = p.communicate()
+
+            # VCFtools
+            p = subprocess.Popen(['vcftool', '--version'])
+            stderr, stdout = p.communicate()
+
+            # Bowtie2
+            p = subprocess.Popen(['bowtie2', '--version'])
+            stderr, stdout = p.communicate()
+
+            # RAxML
+            p = subprocess.Popen(['raxmlHPC-PTHREADS-AVX2', '-v'])
+            stderr, stdout = p.communicate()
+
+
+    @staticmethod
     def make_folder(folder):
         # Will create parent directories if don't exist and will not return error if already exists
         pathlib.Path(folder).mkdir(parents=True, exist_ok=True)
