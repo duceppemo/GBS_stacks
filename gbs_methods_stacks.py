@@ -297,6 +297,7 @@ class Methods(object):
                              '-']
         samtools_sort_cmd = ['samtools', 'sort',
                              '-@', str(cpu),
+                             '--reference', ref,
                              '-o', output_bam,
                              '-']
         # samtools can only index chromosomes up to 512M bp.
