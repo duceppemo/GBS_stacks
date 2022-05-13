@@ -108,7 +108,7 @@ if __name__ == "__main__":
     parser.add_argument('--output-fasta', '-out', metavar='SNP_regions.fasta',
                         type=str,
                         required=True,
-                        help='Fasta output file contraining the regions. Mandatory')
+                        help='Fasta output file containing the regions. Mandatory')
     # Get the arguments into an object
     arguments = parser.parse_args()
     Ref_Extractor(arguments)

@@ -9,17 +9,16 @@ __author__ = 'duceppemo'
 __version__ = 'v0.1'
 
 
-class Ref_Extractor(object):
+class RefExtractor(object):
     def __init__(self, args):
         # Arguments
         self.ref = args.reference
         self.vcf = args.variant
-        self.bp = args.base_pairs
         self.output = args.output_fasta
 
         # Run
         vcf_dict = Methods.parse_vcf(self.vcf)
-        Methods.extract_regions_iter(self.ref, vcf_dict, self.bp, self.output)
+        Methods.extract_regions_iter(self.ref, vcf_dict, self.output)
 
 
 class Methods(object):
@@ -37,16 +36,20 @@ class Methods(object):
                 field_list = line.split('\t')
                 chrom = field_list[0]
                 pos = field_list[1]
+                ref = field_list[3]
+                alt = field_list[4]
                 if chrom not in vcf_dict:
-                    vcf_dict[chrom] = [pos]
+                    vcf_dict[chrom] = [(pos, ref, alt)]
                 else:
                     if pos not in vcf_dict[chrom]:  # Avoid duplicated positions
-                        vcf_dict[chrom].append(pos)
+                        vcf_dict[chrom].append((pos, ref, alt))
 
         return vcf_dict
 
     @staticmethod
-    def extract_regions_iter(ref, vcf_dict, bp, out):
+    def extract_regions_iter(ref, vcf_dict, out):
+        counter = 1
+
         # https://www.biostars.org/p/710/
         with open(out, 'w') as fh_out:
             print('Parsing reference fasta file...')
@@ -55,30 +58,31 @@ class Methods(object):
                 faiter = (x[1] for x in groupby(fh_in, lambda line: line[0] == '>'))
 
                 for header in faiter:
-                    # drop the ">"
-                    chrom = header.__next__()[1:].rstrip().split()[0]
+                    # Writing form header
+                    fasta_header = header.__next__()
+                    fh_out.write(fasta_header)
+                    chrom = fasta_header[1:].rstrip().split()[0]  # drop the ">"
+
                     # join all sequence lines to one.
                     full_seq = ''.join(s.rstrip() for s in faiter.__next__())
-                    if chrom in vcf_dict:
-                        for pos in vcf_dict[chrom]:
+
+                    if chrom in vcf_dict:  # contig (or "chromosome" needs to be changed)
+                        for pos_tuple in vcf_dict[chrom]:
+                            pos, ref, alt = pos_tuple
                             index = int(pos) - 1  # position 1 is index 0
-                            start = index - int(bp)
-                            if start <= 0:  # if the SNP is closer to beginning of sequence than the range required
-                                start = 0
-                            stop = index + int(bp)
-                            if stop > len(full_seq):  # if the SNP is closer to end of sequence than the range required
-                                stop = len(full_seq)
 
-                            header = '>{}:{}-{} SNP at {}'.format(chrom, start + 1, stop + 1, index + 1)  # index -> position
-                            extracted_region = full_seq[start:stop + 1]
-                            fh_out.write('{}\n{}\n'.format(header, extracted_region))
+                            # Change the reference
+                            ref_og = full_seq[index]
+                            full_seq = full_seq[:index] + ref + full_seq[index + 1:]
+                            ref_new = full_seq[index]
+                            t = 1
 
-                    # yield tuple(header, seq)
+                    # Write sequence to file.
+                    fh_out.write('{}\n'.format(full_seq))
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description='Extract flanking regions of SNPs from a VCF file using the corresponding '
-                                        'reference fasta file.')
+    parser = ArgumentParser(description='Modify a fasta file to match the REF call from a VCF file.')
     parser.add_argument('--reference', '-ref', metavar='reference.fasta',
                         required=True,
                         type=str,
@@ -87,15 +91,10 @@ if __name__ == "__main__":
                         required=True,
                         type=str,
                         help='VCF file for which reference regions will be extracted for each position. Mandatory.')
-    parser.add_argument('--base-pairs', '-bp', metavar='200',
-                        required=False,
-                        type=int,
-                        default=200,
-                        help='Number of base pairs to extract on each side of the SNP. Defaults is 200. Mandatory.')
-    parser.add_argument('--output-fasta', '-out', metavar='SNP_regions.fasta',
+    parser.add_argument('--output-fasta', '-out', metavar='modified_ref.fasta',
                         type=str,
                         required=True,
                         help='Fasta output file containing the regions. Mandatory')
     # Get the arguments into an object
     arguments = parser.parse_args()
-    Ref_Extractor(arguments)
+    RefExtractor(arguments)
