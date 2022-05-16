@@ -16,10 +16,11 @@ class Ref_Extractor(object):
         self.vcf = args.variant
         self.bp = args.base_pairs
         self.output = args.output_fasta
+        self.prefix = args.prefix
 
         # Run
         vcf_dict = Methods.parse_vcf(self.vcf)
-        Methods.extract_regions_iter(self.ref, vcf_dict, self.bp, self.output)
+        Methods.extract_regions_iter(self.ref, vcf_dict, self.bp, self.output, self.prefix)
 
 
 class Methods(object):
@@ -48,7 +49,7 @@ class Methods(object):
         return vcf_dict
 
     @staticmethod
-    def extract_regions_iter(ref, vcf_dict, bp, out):
+    def extract_regions_iter(ref, vcf_dict, bp, out, prefix):
         counter = 1
 
         # https://www.biostars.org/p/710/
@@ -77,8 +78,8 @@ class Methods(object):
                             if stop > len(full_seq):  # if the SNP is closer to end of sequence than the range required
                                 stop = len(full_seq)
 
-                            fh_out.write('CAN{:03d}\t{}\t{}\t{}\t{}\t{}\t+\tSNP\t2\t'.format(
-                                counter, chrom, pos, pos, ref, alt))
+                            fh_out.write('{}{:05d}\t{}\t{}\t{}\t{}\t{}\t+\tSNP\t2\t'.format(
+                                prefix, counter, chrom, pos, pos, ref, alt))
                             # part1 = full_seq[start:index].upper()
                             # part2 = ref.upper()
                             # part3 = alt.upper()
@@ -109,6 +110,11 @@ if __name__ == "__main__":
                         type=str,
                         required=True,
                         help='Fasta output file containing the regions. Mandatory')
+    parser.add_argument('--prefix', '-pre', metavar='LOC',
+                        required=False,
+                        type=str,
+                        default='LOC',
+                        help='Prefix for marker names. E.g. "CAN"  will results in CAN001.')
     # Get the arguments into an object
     arguments = parser.parse_args()
     Ref_Extractor(arguments)
