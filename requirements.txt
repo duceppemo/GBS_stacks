@@ -411,3 +411,11 @@ xorg-xproto=7.0.31=h27cfd23_1007
 xz=5.2.5=h7b6447c_0
 zlib=1.2.11=h166bdaf_1014
 zstd=1.5.2=ha95c52a_0
+
+plotly~=6.1.2
+pandas~=2.2.3
+numpy~=2.2.6
+matplotlib~=3.10.3
+psutil~=7.0.0
+scipy~=1.15.2
+ete3~=3.1.3
