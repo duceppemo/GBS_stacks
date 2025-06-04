@@ -73,7 +73,7 @@ def parse_vcf(my_vcf_file, my_sample_list):
                     try:
                         # GT:DP:AD:GQ:GL
                         dp = int(sample_info.split(':')[1])
-                    except IndexError:
+                    except (IndexError, ValueError):
                         dp = 0
                     if my_sample_list[i] not in my_dict:
                         my_dict[my_sample_list[i]] = dict()
@@ -289,7 +289,21 @@ def make_plot(my_df, the_vcf):
     plt.xticks(rotation=60)
     plt.ylabel('Depth of Coverage')
 
-    out_plot = the_vcf.replace('vcf', 'pdf')
+    out_plot = the_vcf.replace('.vcf', '_no_outliers.pdf')
+    plt.savefig(out_plot, format='pdf', bbox_inches='tight')
+
+    # Clear the current figure
+    plt.clf()
+
+    plt.figure(figsize=(16, 10))  # Width=12, Height=8 inches
+    sns.boxplot(my_df)
+    # sns.violinplot(my_df, cut=0)
+    plt.title('SNP Depth of Coverage Boxplot - Outliers Included')
+    plt.xlabel('Sample')
+    plt.xticks(rotation=60)
+    plt.ylabel('Depth of Coverage')
+
+    out_plot = the_vcf.replace('.vcf', '_with_outliers.pdf')
     plt.savefig(out_plot, format='pdf', bbox_inches='tight')
 
 
