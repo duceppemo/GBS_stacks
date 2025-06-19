@@ -250,18 +250,33 @@ def coverage_graph(my_vcf_dict):
     #     Maximum='max'
     # ).round(1).reset_index()
 
-    # Sort values ascending in dataframe
-    for column in df.columns:
-        df[column] = df[column].sort_values().values
+    # # Sort values ascending in dataframe
+    # df.sort_index(ascending=True, inplace=True)
+
+    # Split index column.
+    df = df.reset_index(names='Coordinates')
+    df[['chrom', 'pos']] = df['Coordinates'].str.split(':', expand=True, n=2)
+    df['pos'] = df['pos'].astype(int)  # Convert column 'pos' to int
+    df = df.iloc[:, 1:]  # Drop the first column (index 0)
+
+    # Move the last two columns of a Pandas DataFrame to the first two positions,
+    cols = df.columns.tolist()  # Get the list of all column names
+    last_two_cols = cols[-2:]  # Extract the last two columns
+    remaining_cols = cols[:-2]  # Get the remaining columns (all except the last two)
+    new_col_order = last_two_cols + remaining_cols  # Create the new column order
+    df = df[new_col_order]  # Reindex the DataFrame with the new column order
+
+    df.sort_values(by=['chrom', 'pos'], ascending=[True, True], inplace=True)
 
     # Compute statistics
+    stat_df = df.iloc[:, 2:]  # Drop the first two column (index 0, 1)
     summary_df = pd.DataFrame({
-        'min': df.min(),
-        'Q1': df.quantile(0.25),
-        'Q2 (median)': df.median(),
-        'Q3': df.quantile(0.75),
-        'mean': df.mean(),
-        'max': df.max()
+        'min': stat_df.min(),
+        'Q1': stat_df.quantile(0.25),
+        'Q2 (median)': stat_df.median(),
+        'Q3': stat_df.quantile(0.75),
+        'mean': stat_df.mean(),
+        'max': stat_df.max()
     }).round(1)
 
     # Reorder index to be columns as rows
@@ -325,7 +340,7 @@ if __name__ == "__main__":
 
     # Write to TSV
     out_table = my_vcf.replace('.vcf', '.tsv')
-    pd.DataFrame.to_csv(df_stats, out_table, sep='\t',header=True, index=True)
+    pd.DataFrame.to_csv(df_stats, out_table, sep='\t',header=True, index=False)
 
     # Write to TSV
     out_table = my_vcf.replace('.vcf', '_summary.tsv')
