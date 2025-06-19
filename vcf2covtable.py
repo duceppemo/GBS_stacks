@@ -2,27 +2,28 @@ from typing import Any
 import re
 from io import TextIOBase
 # import plotly.graph_objects as go
-import plotly.express as px
+# import plotly.express as px
 import seaborn as sns
 import matplotlib.pyplot as plt
 import gzip
 import pandas as pd
-from collections import defaultdict
-import numpy as np
+# from collections import defaultdict
+# import numpy as np
 import os
 import sys
 from concurrent import futures
 
-from fontTools.misc.cython import returns
+# from fontTools.misc.cython import returns
 
 pd.set_option('future.no_silent_downcasting', True)
 
 
-if len(sys.argv) != 2:
-    print('Usage: pythong vcf_depth_table.py <samples.vcf>')
+if len(sys.argv) != 3:
+    print('Usage: pythong vcf_depth_table.py <samples.vcf> <DP position>')
     sys.exit()
 
 my_vcf = sys.argv[1]
+dp_position = int(sys.argv[2])
 
 # def parse_vcf(vcf_file):
 #     vcf_dict = defaultdict()
@@ -55,7 +56,7 @@ my_vcf = sys.argv[1]
 #                     vcf_dict[sample_list[i]]['DP'].append(DP)
 #     return vcf_dict
 
-def parse_vcf(my_vcf_file, my_sample_list):
+def parse_vcf(my_vcf_file, my_sample_list, dp_pos):
     my_dict = dict()
     with gzip.open(my_vcf_file, 'rt') if my_vcf_file.endswith('.gz') else open(my_vcf_file, 'r') as f:
         for line in f:
@@ -72,7 +73,7 @@ def parse_vcf(my_vcf_file, my_sample_list):
                 for i, sample_info in enumerate(field_list[9].split('\t')):
                     try:
                         # GT:DP:AD:GQ:GL
-                        dp = int(sample_info.split(':')[1])
+                        dp = int(sample_info.split(':')[dp_pos])
                     except (IndexError, ValueError):
                         dp = 0
                     if my_sample_list[i] not in my_dict:
@@ -90,7 +91,7 @@ def get_sample_list(vcf_file):
                 continue
         return my_sample_list
 
-def process_line(line, my_sample_list):
+def process_line(line, my_sample_list, dp_pos):
     """Function to process a single line."""
     my_dict: dict[str, list[int]] = dict()
 
@@ -104,7 +105,7 @@ def process_line(line, my_sample_list):
         for i, sample_info in enumerate(field_list[9].split('\t')):
             try:
                 # GT:DP:AD:GQ:GL
-                dp = int(sample_info.split(':')[1])
+                dp = int(sample_info.split(':')[dp_pos])
             except IndexError:
                 dp = 0
             if my_sample_list[i] not in my_dict:
@@ -146,7 +147,7 @@ def chunk_read(f_obj: TextIOBase, sentinel: str, max_sentinel: int):
             chunk = line
     yield chunk
 
-def process_chunk(this_chunk, my_sample_list):
+def process_chunk(this_chunk, my_sample_list, dp_pos):
     """Function to process a single line."""
     # my_dict: dict[str, list[tuple[str, int]]] = dict()
     my_dict = dict()
@@ -165,7 +166,7 @@ def process_chunk(this_chunk, my_sample_list):
             for i, sample_info in enumerate(field_list[9].split('\t')):
                 try:
                     # GT:DP:AD:GQ:GL
-                    dp = int(sample_info.split(':')[1])
+                    dp = int(sample_info.split(':')[dp_pos])
                 except IndexError:
                     dp = 0
                 if my_sample_list[i] not in my_dict:
@@ -267,6 +268,7 @@ def coverage_graph(my_vcf_dict):
     df = df[new_col_order]  # Reindex the DataFrame with the new column order
 
     df.sort_values(by=['chrom', 'pos'], ascending=[True, True], inplace=True)
+    df = df.reset_index(drop=True)
 
     # Compute statistics
     stat_df = df.iloc[:, 2:]  # Drop the first two column (index 0, 1)
@@ -293,7 +295,7 @@ def coverage_graph(my_vcf_dict):
 
     # return fig_table, df, summary_df
     # return df, summary_df
-    return df, summary_df
+    return stat_df, summary_df
 
 def make_plot(my_df, the_vcf):
     plt.figure(figsize=(16, 10))  # Width=12, Height=8 inches
@@ -326,7 +328,7 @@ def make_plot(my_df, the_vcf):
 if __name__ == "__main__":
     sample_list = get_sample_list(my_vcf)
     print('Parsing VCF file: {}'.format(os.path.basename(my_vcf)))
-    coverage_dict = parse_vcf(my_vcf, sample_list)
+    coverage_dict = parse_vcf(my_vcf, sample_list, dp_position)
     # coverage_dict = parse_file_parallel(my_vcf, sample_list)
 
     print('Generating coverage statistics...')
